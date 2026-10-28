@@ -13,6 +13,15 @@
 h2{margin:0 0 4px}.muted{color:#666;font-size:13px}.access{background:#fff3d6;padding:8px;border-radius:6px;font-size:13px;margin:8px 0}
 details{background:#fff;border:1px solid #ddd;border-radius:6px;margin:8px 0;padding:8px}summary{cursor:pointer;font-weight:600}
 .route{border-top:1px solid #eee;padding:6px 0;font-size:13px}.grade{font-weight:700;color:var(--accent,#b3261e)}
+.pin{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 1.5px #fff,0 1px 4px rgba(0,0,0,.5)}
+.pin span{width:20px;height:20px;border-radius:50%;background:#fff;color:#222;font:700 11px/20px system-ui;text-align:center}
+.pin.none{opacity:.45}.far .pin{transform:scale(.45)}.far .pin span{font-size:0}
+#legend{position:absolute;left:10px;bottom:24px;z-index:1000;background:rgba(255,255,255,.93);padding:6px 8px;border-radius:6px;font-size:11px;box-shadow:0 1px 4px rgba(0,0,0,.3)}
+#legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+.info{background:#eef6ff;border:1px solid #cfe0f5;border-radius:6px;padding:8px;margin:8px 0;font-size:13px}
+.pk{width:20px;height:20px;border-radius:4px;background:#1565c0;color:#fff;font:700 12px/20px system-ui;text-align:center;box-shadow:0 0 0 1.5px #fff,0 1px 3px rgba(0,0,0,.5)}.far .pk{display:none}
+.pkb{display:inline-block;width:16px;height:16px;border-radius:3px;background:#1565c0;color:#fff;font:700 11px/16px system-ui;text-align:center}
+.tp{margin:6px 0;padding:6px;background:#fafafa;font-size:13px}.tp summary{font-weight:500}.hl{font-weight:700;background:#fff3d6;border-radius:4px}
 .topobox{background:#fff;border:1px solid #ddd;border-radius:6px;padding:8px;margin:8px 0;font-size:13px}.lbl{display:inline-block;min-width:22px;text-align:center;background:#243b53;color:#fff;border-radius:11px;font-weight:700;font-size:12px;padding:0 6px;margin-right:6px}.dim{opacity:.4}.topo{max-width:100%;border-radius:6px;margin-top:6px;border:1px solid #ddd;display:block}.tag{font-size:11px;background:#e8eef7;border-radius:4px;padding:1px 5px;margin-left:4px}
 .item{display:flex;justify-content:space-between;padding:8px;margin:4px 0;background:#fff;border:1px solid #ddd;border-radius:6px;cursor:pointer}
 .item:hover{background:#eef3fa}.item.off{opacity:.45}.back{cursor:pointer;color:#245;font-size:13px;margin-bottom:8px;display:inline-block}
@@ -23,8 +32,9 @@ details{background:#fff;border:1px solid #ddd;border-radius:6px;margin:8px 0;pad
 <label>Rope grade <select id="rmin"></select> to <select id="rmax"></select></label>
 <label>Boulder <select id="bmin"></select> to <select id="bmax"></select></label>
 <label><input type="text" id="q" placeholder="Search route name"></label>
+<label><input type="checkbox" id="pk" checked>Parking</label>
 <button id="reset">Reset</button></div>
-<div id="wrap"><div id="map"></div><div id="panel"></div></div>
+<div id="legend"></div><div id="wrap"><div id="map"></div><div id="panel"></div></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script>
@@ -33,7 +43,7 @@ details{background:#fff;border:1px solid #ddd;border-radius:6px;margin:8px 0;pad
 const TITLE='Climbing Areas';              // name shown in the top bar and browser tab
 const ABOUT_TEXT='';                       // short intro shown above the area list (leave blank for none)
 const HEADER_COLOR='#243b53';              // top bar colour
-const MARKER_COLOR='#b3261e';              // map markers and grade text colour
+const MARKER_COLOR='#b3261e';              // colour of grade text in route lists
 const HIDE_UNVERIFIED=false;               // true = hide routes marked Unverified / Needs review
 const SHOW_STATUS_TAGS=true;               // true = show small status labels on routes
 // ---- DATA: paste published Google Sheet CSV links between the quotes ----
@@ -41,17 +51,20 @@ const SHOW_STATUS_TAGS=true;               // true = show small status labels on
 const AREAS_URL='';
 const ROUTES_URL='';
 const TOPOS_URL='';          // optional: Topos tab (one row per topo photo)
-const TOPO_ROUTES_URL='';    // optional: Topo_Routes tab (which route is which number/letter on which topo)
+const TOPO_ROUTES_URL='';
+const PARKING_URL='';        // optional: Parking tab
+const APPROACHES_URL='';     // optional: Approaches tab
+// (optional trail lines: put a file named Trails.geojson next to index.html)    // optional: Topo_Routes tab (which route is which number/letter on which topo)
 // =====================================================================================
 document.title=TITLE;
 document.querySelector('#top b').textContent=TITLE;
 document.getElementById('top').style.background=HEADER_COLOR;
 document.documentElement.style.setProperty('--accent',MARKER_COLOR);
-const NUM=['Latitude','Longitude','Height_m'];
+const NUM=['Latitude','Longitude','Height_m','End_Latitude','End_Longitude'];
 const clean=o=>{for(const k in o){let v=o[k];v=(v==null||String(v).trim()==='')?null:String(v).trim();if(v!==null&&NUM.includes(k))v=Number(v)||null;o[k]=v}return o};
 const load=f=>new Promise((ok,err)=>Papa.parse(f,{download:true,header:true,skipEmptyLines:true,complete:r=>ok(r.data.map(clean)),error:err}));
 const loadOpt=(f,key)=>load(f).then(d=>d.filter(r=>r[key])).catch(()=>[]);
-Promise.all([load(AREAS_URL||'Areas.csv'),load(ROUTES_URL||'Routes.csv'),loadOpt(TOPOS_URL||'Topos.csv','Topo_ID'),loadOpt(TOPO_ROUTES_URL||'Topo_Routes.csv','Topo_ID')]).then(([areas,routes,topoList,topoRoutes])=>{
+Promise.all([load(AREAS_URL||'Areas.csv'),load(ROUTES_URL||'Routes.csv'),loadOpt(TOPOS_URL||'Topos.csv','Topo_ID'),loadOpt(TOPO_ROUTES_URL||'Topo_Routes.csv','Topo_ID'),loadOpt(PARKING_URL||'Parking.csv','Parking_ID'),loadOpt(APPROACHES_URL||'Approaches.csv','Approach_ID'),fetch('Trails.geojson').then(r=>r.ok?r.json():null).catch(()=>null)]).then(([areas,routes,topoList,topoRoutes,parkingList,approachList,trails])=>{
 if(HIDE_UNVERIFIED)routes=routes.filter(r=>!/unverified|needs review/i.test((r.Data_Confidence||'')+' '+(r.Route_Status||'')));
 const esc=s=>s==null?'':String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const byId=Object.fromEntries(areas.map(a=>[a.Area_ID,a]));
@@ -62,7 +75,7 @@ function score(g){ // returns {sys,val}
   if(m=g.match(/^5\.(\d+)([abcd])?(\+)?/))return{sys:'Y',val:+m[1]*4+(m[2]?'abcd'.indexOf(m[2]):m[3]?2:1)};
   return{sys:null};
 }
-const types=[...new Set(routes.map(r=>r.Climb_Type).filter(Boolean))].sort();
+const types=[...new Set(routes.map(r=>r.Climb_Type||'(no type)'))].sort();
 const T=document.getElementById('types');
 T.innerHTML=types.map(t=>`<label><input type="checkbox" class="ty" value="${esc(t)}" checked>${esc(t)}</label> `).join('');
 const fill=(id,list,first)=>{document.getElementById(id).innerHTML=`<option value="">${first}</option>`+list.map(x=>`<option value="${x}">${x}</option>`).join('')};
@@ -72,7 +85,7 @@ fill('rmin',yds,'any');fill('rmax',yds,'any');fill('bmin',vs,'any');fill('bmax',
 const num=(id,sys)=>{const v=document.getElementById(id).value;return v?(sys==='V'?+v.slice(1):+v.slice(2)*4):null};
 function match(r){
   const ty=[...document.querySelectorAll('.ty:checked')].map(x=>x.value);
-  if(!ty.includes(r.Climb_Type))return false;
+  if(!ty.includes(r.Climb_Type||'(no type)'))return false;
   const q=document.getElementById('q').value.trim().toLowerCase();
   if(q&&!(r.Route_Name||'').toLowerCase().includes(q))return false;
   const s=score(r.Grade);
@@ -89,38 +102,49 @@ function recompute(){
   ok.forEach(r=>{cnt[r.Area_ID]=(cnt[r.Area_ID]||0)+1});
   const total=id=>(cnt[id]||0)+descendants(id).reduce((n,d)=>n+(cnt[d]||0),0);
   areas.forEach(a=>a._n=total(a.Area_ID));
-  markers.forEach(({a,m})=>{const on=a._n>0;m.setStyle({fillColor:on?MARKER_COLOR:'#999',fillOpacity:on?.9:.35,radius:on?7+Math.min(14,Math.sqrt(a._n)*1.5):6});m.setTooltipContent(`${a.Area_Name}: ${a._n} route(s)`)});
+  markers.forEach(({a,m})=>{m.setIcon(pin(a));m.setTooltipContent(`${a.Area_Name}: ${a._n} route(s)`)});
   current?show(current):home();
 }
 function routeHtml(r){
   const meta=[r.Climb_Type,r.Height_m?r.Height_m+' m':null,r.Gear,r.First_Ascent].filter(Boolean).map(esc).join(' · ');
-  return `<div class="route"><span class="grade">${esc(r.Grade)}</span> <b>${esc(r.Route_Name)}</b>${SHOW_STATUS_TAGS&&r.Route_Status?`<span class="tag">${esc(r.Route_Status)}</span>`:''}<div class="muted">${meta}</div><div>${esc(r.Description)}</div>${topoLinks(r)?`<div class="muted">Topo: ${topoLinks(r)}</div>`:''}</div>`;
+  return `<div class="route"><span class="grade">${esc(r.Grade)}</span> <b>${esc(r.Route_Name)}</b>${SHOW_STATUS_TAGS&&r.Route_Status?`<span class="tag">${esc(r.Route_Status)}</span>`:''}<div class="muted">${meta}</div><div>${esc(r.Description)}</div>${topoDetails(r)}</div>`;
 }
 const fixUrl=u=>{u=u.trim();const g=u.match(/drive\.google\.com\/file\/d\/([\w-]+)/)||u.match(/drive\.google\.com\/open\?id=([\w-]+)/);
   if(g)return 'https://drive.google.com/thumbnail?id='+g[1]+'&sz=w1200';
   return /^(https?:\/\/|[\w\-.\/ %]+$)/.test(u)?u:''};
+topoList=topoList.map(tp=>{const loc=(tp.Image_Location_or_URL||tp.Image_URL||'').trim(),file=(tp.Image_File_Name||'').trim();
+  let u=loc||file;if(loc&&file&&!/\.(jpe?g|png|webp|gif)(\?|$)/i.test(loc)&&!/drive\.google\.com/.test(loc))u=loc.replace(/\/?$/,'/')+file;
+  return {...tp,Title:tp.Title||tp.Topo_Name,Image_URL:u}});
 const routeById=Object.fromEntries(routes.map(r=>[r.Route_ID,r]));
-const topoLinks=r=>topoRoutes.filter(x=>x.Route_ID===r.Route_ID).map(x=>{const tp=topoList.find(q=>q.Topo_ID===x.Topo_ID);const u=tp?fixUrl(tp.Image_URL||''):'';return tp?(u?`<a href="${esc(u)}" target="_blank" rel="noopener">${esc(tp.Title||'Topo')} (${esc(x.Label)})</a>`:`${esc(tp.Title||'Topo')} (${esc(x.Label)})`):''}).filter(Boolean).join(', ');
-const topoBlock=areaId=>topoList.filter(tp=>tp.Area_ID===areaId).map(tp=>{
-  const rows=topoRoutes.filter(x=>x.Topo_ID===tp.Topo_ID).map(x=>({x,r:routeById[x.Route_ID]})).filter(o=>o.r).sort((p,q)=>String(p.x.Label).localeCompare(String(q.x.Label),undefined,{numeric:true}));
-  const u=fixUrl(tp.Image_URL||'');
-  return `<div class="topobox"><b>${esc(tp.Title||'Topo')}</b>${u?`<a href="${esc(u)}" target="_blank" rel="noopener"><img class="topo" loading="lazy" src="${esc(u)}" alt="Topo: ${esc(tp.Title||'')}"></a>`:''}`+
-   rows.map(o=>`<div class="${okSet.has(o.r.Route_ID)?'':'dim'}" style="margin-top:4px"><span class="lbl">${esc(o.x.Label)}</span>${esc(o.r.Route_Name)} <span class="grade">${esc(o.r.Grade)}</span></div>`).join('')+
-   (tp.Notes?`<div class="muted" style="margin-top:4px">${esc(tp.Notes)}</div>`:'')+`</div>`}).join('');
+const pics=s=>s?String(s).split(';').map(fixUrl).filter(Boolean).map(u=>`<a href="${esc(u)}" target="_blank" rel="noopener"><img class="topo" loading="lazy" src="${esc(u)}" alt="Photo"></a>`).join(''):'';
+const parkById=Object.fromEntries(parkingList.map(x=>[x.Parking_ID,x]));
+const infoBlock=id=>parkingList.filter(x=>x.Area_ID===id).map(x=>`<div class="info"><span class="pkb">P</span> <b>${esc(x.Name||'Parking')}</b>${x.Latitude!=null?` <a href="https://www.google.com/maps/search/?api=1&query=${x.Latitude},${x.Longitude}" target="_blank" rel="noopener">Open in Maps</a>`:''}<div class="muted">${esc(x.Notes)}</div>${pics(x.Photo_URL)}</div>`).join('')+
+  approachList.filter(x=>x.Area_ID===id).map(x=>{const meta=[x.Time_Min?x.Time_Min+' min':null,x.Distance_km?x.Distance_km+' km':null,x.Difficulty].filter(Boolean).map(esc).join(' · ');const pk=parkById[x.Parking_ID];
+  return `<div class="info"><b>Approach: ${esc(x.Title||'')}</b> <span class="muted">${meta}</span>${pk?`<div class="muted">From: ${esc(pk.Name||'Parking')}</div>`:''}<div>${esc(x.Description)}</div>${pics(x.Photo_URL)}</div>`}).join('');
+const natural=(p,q)=>String(p.Label).localeCompare(String(q.Label),undefined,{numeric:true});
+const topoImg=tp=>{const u=fixUrl(tp.Image_URL||'');return u?`<a href="${esc(u)}" target="_blank" rel="noopener"><img class="topo" loading="lazy" src="${esc(u)}" alt="Topo: ${esc(tp.Title||'')}"></a>`:''};
+const topoMeta=tp=>tp.Orientation_or_Coverage?` <span class="muted">(${esc(tp.Orientation_or_Coverage)})</span>`:'';
+const topoFoot=tp=>(tp.Notes?`<div class="muted" style="margin-top:4px">${esc(tp.Notes)}</div>`:'')+(tp.Source_or_Credit?`<div class="muted">Credit: ${esc(tp.Source_or_Credit)}</div>`:'');
+const topoDetails=r=>topoRoutes.filter(x=>x.Route_ID===r.Route_ID).map(x=>{
+  const tp=topoList.find(q=>q.Topo_ID===x.Topo_ID);if(!tp)return '';
+  const rows=topoRoutes.filter(y=>y.Topo_ID===tp.Topo_ID).map(y=>({y,r:routeById[y.Route_ID]})).filter(o=>o.r).sort((p,q)=>natural(p.y,q.y));
+  return `<details class="tp"><summary>Topo: ${esc(tp.Title||'Topo')} - this route is <span class="lbl">${esc(x.Label)}</span></summary>${topoMeta(tp)}${topoImg(tp)}${rows.map(o=>`<div class="${o.r.Route_ID===r.Route_ID?'hl':''}" style="margin-top:3px"><span class="lbl">${esc(o.y.Label)}</span>${esc(o.r.Route_Name)} <span class="grade">${esc(o.r.Grade)}</span></div>`).join('')}${topoFoot(tp)}</details>`}).join('');
+const topoBlock=areaId=>topoList.filter(tp=>tp.Area_ID===areaId&&!topoRoutes.some(x=>x.Topo_ID===tp.Topo_ID)).sort((p,q)=>(parseFloat(p.Topo_Order)||999)-(parseFloat(q.Topo_Order)||999)).map(tp=>`<div class="topobox"><b>${esc(tp.Title||'Topo')}</b>${topoMeta(tp)}${topoImg(tp)}${topoFoot(tp)}</div>`).join('');
 const mine=id=>ok.filter(r=>r.Area_ID===id);
-function sub(a){const rs=mine(a.Area_ID);
-  return `<details ${rs.length?'':'style="opacity:.5"'}><summary>${esc(a.Area_Name)} (${rs.length})</summary>${a.Access_Description?`<div class="access">${esc(a.Access_Description)}</div>`:''}${topoBlock(a.Area_ID)}${rs.map(routeHtml).join('')||'<div class="muted">No matching routes.</div>'}</details>`}
+function sub(a){const rs=mine(a.Area_ID),ks=kids(a.Area_ID);
+  return `<details ${a._n?'':'style="opacity:.5"'}><summary>${esc(a.Area_Name)} (${a._n})</summary>${a.Access_Description?`<div class="access">${esc(a.Access_Description)}</div>`:''}${infoBlock(a.Area_ID)}${topoBlock(a.Area_ID)}${rs.map(routeHtml).join('')}${ks.map(sub).join('')}${(rs.length||ks.length)?'':'<div class="muted">No matching routes.</div>'}</details>`}
 let current=null;
 const P=document.getElementById('panel');
 function show(a){
   current=a;const subs=kids(a.Area_ID),rs=mine(a.Area_ID);
   let h=`<span class="back" onclick="goHome()">&larr; All areas</span><h2>${esc(a.Area_Name)}</h2><div class="muted">${esc(a.Area_Level)} · ${a._n} matching route(s)</div>`;
   if(a.Access_Description)h+=`<div class="access">${esc(a.Access_Description)}</div>`;
-  h+=topoBlock(a.Area_ID);
+  h+=infoBlock(a.Area_ID)+topoBlock(a.Area_ID);drawTrails(a);
   if(rs.length)h+=`<details open><summary>Routes here (${rs.length})</summary>${rs.map(routeHtml).join('')}</details>`;
   h+=subs.map(sub).join('');P.innerHTML=h;
 }
 function home(){
+  trailLayer.clearLayers();
   const top=areas.filter(a=>!a.Parent_Area_ID).sort((x,y)=>y._n-x._n);
   P.innerHTML=`<h2>Areas</h2>${ABOUT_TEXT?'<p>'+esc(ABOUT_TEXT)+'</p>':''}<p class="muted">${ok.length} matching route(s). Click a marker or an area below.</p>`+
     top.map(a=>`<div class="item ${a._n?'':'off'}" onclick="pick('${a.Area_ID}')"><span>${esc(a.Area_Name)}${a.Latitude==null?' <span class="tag">not on map</span>':''}</span><b>${a._n}</b></div>`).join('');
@@ -129,8 +153,36 @@ window.goHome=()=>{current=null;home()};
 window.pick=id=>{const a=byId[id];show(a);if(a.Latitude!=null)map.setView([a.Latitude,a.Longitude],Math.max(map.getZoom(),10))};
 const map=L.map('map');
 L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'&copy; OpenStreetMap contributors'}).addTo(map);
-const markers=areas.filter(a=>a.Latitude!=null&&a.Longitude!=null).map(a=>({a,m:L.circleMarker([a.Latitude,a.Longitude],{color:'#fff',weight:2}).bindTooltip(a.Area_Name).on('click',()=>show(a)).addTo(map)}));
+const trailLayer=L.layerGroup().addTo(map),parkLayer=L.layerGroup().addTo(map);
+const coordOf=id=>{while(id){const a=byId[id];if(!a)return null;if(a.Latitude!=null&&a.Longitude!=null)return [a.Latitude,a.Longitude];id=a.Parent_Area_ID}return null};
+function approachLine(x){const pk=parkById[x.Parking_ID];if(!pk||pk.Latitude==null)return null;
+  const mid=String(x.Path||'').split(';').map(s=>s.split(',').map(Number)).filter(q=>q.length===2&&isFinite(q[0])&&isFinite(q[1])&&String(q[0])!=='0');
+  const end=(x.End_Latitude!=null&&x.End_Longitude!=null)?[x.End_Latitude,x.End_Longitude]:coordOf(x.Area_ID);
+  return [[pk.Latitude,pk.Longitude],...mid,...(end?[end]:[])]}
+function drawApproaches(list){list.forEach(x=>{const pts=approachLine(x);if(pts&&pts.length>1)L.polyline(pts,{color:'#1565c0',weight:4,dashArray:'8 6'}).bindTooltip(`Approach: ${x.Title||''}${x.Time_Min?' ('+x.Time_Min+' min)':''}`).addTo(trailLayer)})}
+function drawTrails(a){trailLayer.clearLayers();const ids=new Set([a.Area_ID,...descendants(a.Area_ID)]);
+  if(trails)L.geoJSON({type:'FeatureCollection',features:trails.features.filter(f=>f.properties&&ids.has(f.properties.Area_ID))},{style:{color:'#1565c0',weight:3,dashArray:'6 6'}}).addTo(trailLayer);
+  drawApproaches(approachList.filter(x=>ids.has(x.Area_ID)))}
+parkingList.filter(x=>x.Latitude!=null&&x.Longitude!=null).forEach(x=>L.marker([x.Latitude,x.Longitude],{icon:L.divIcon({className:'',iconSize:[20,20],iconAnchor:[10,10],html:'<div class="pk">P</div>'})}).bindTooltip(x.Name||'Parking').bindPopup(`<b>${esc(x.Name||'Parking')}</b><br>${esc(x.Notes)}<br>${pics(x.Photo_URL)}<a href="https://www.google.com/maps/search/?api=1&query=${x.Latitude},${x.Longitude}" target="_blank" rel="noopener">Open in Maps</a>`,{maxWidth:260}).on('click',()=>{trailLayer.clearLayers();drawApproaches(approachList.filter(q=>q.Parking_ID===x.Parking_ID))}).addTo(parkLayer));
+document.getElementById('pk').onchange=e=>e.target.checked?parkLayer.addTo(map):map.removeLayer(parkLayer);
+const COLORS=['#e53935','#fb8c00','#fdd835','#43a047','#1e88e5','#3949ab','#8e24aa'];
+const LABELS=['≤5.7 / V0–1','5.8–5.9 / V2','5.10a–b / V3','5.10c–d / V4','5.11 / V5','5.12 / V6–7','5.13+ / V8+'];
+document.getElementById('legend').innerHTML='<b>Ring = grade mix</b><br>'+COLORS.map((c,i)=>`<div><i style="background:${c}"></i>${LABELS[i]}</div>`).join('')+'Number = routes';
+function band(g){const s=score(g);if(!s.sys)return -1;const v=s.val;
+  if(s.sys==='V')return v<=1?0:v===2?1:v===3?2:v===4?3:v===5?4:v<=7?5:6;
+  return v<32?0:v<40?1:v<42?2:v<44?3:v<48?4:v<52?5:6}
+function pin(a){
+  const ids=new Set([a.Area_ID,...descendants(a.Area_ID)]),c=[0,0,0,0,0,0,0];
+  ok.forEach(r=>{if(ids.has(r.Area_ID)){const b=band(r.Grade);if(b>=0)c[b]++}});
+  const sum=c.reduce((x,y)=>x+y,0);let acc=0,stops=[];
+  c.forEach((n,i)=>{if(n){stops.push(`${COLORS[i]} ${acc/sum*100}% ${(acc+n)/sum*100}%`);acc+=n}});
+  const bg=sum?`conic-gradient(${stops.join(',')})`:'#999';
+  return L.divIcon({className:'',iconSize:[30,30],iconAnchor:[15,15],html:`<div class="pin${a._n?'':' none'}" style="background:${bg}"><span>${a._n}</span></div>`});
+}
+const markers=areas.filter(a=>a.Latitude!=null&&a.Longitude!=null).map(a=>({a,m:L.marker([a.Latitude,a.Longitude],{icon:L.divIcon({html:''})}).bindTooltip(a.Area_Name).on('click',()=>show(a)).addTo(map)}));
 map.fitBounds(L.featureGroup(markers.map(x=>x.m)).getBounds().pad(.15));
+const mapEl=document.getElementById('map'),far=()=>mapEl.classList.toggle('far',map.getZoom()<11);
+map.on('zoomend',far);far();
 document.querySelectorAll('#top select,#top input').forEach(e=>e.addEventListener('input',recompute));
 document.getElementById('reset').onclick=()=>{document.querySelectorAll('#top select').forEach(s=>s.value='');document.getElementById('q').value='';document.querySelectorAll('.ty').forEach(c=>c.checked=true);current=null;recompute()};
 recompute();
