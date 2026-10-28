@@ -40,18 +40,18 @@ details{background:#fff;border:1px solid #ddd;border-radius:6px;margin:8px 0;pad
 <script>
 // ============================== EASY SETTINGS ==============================
 // Change the text between the quotes (or true/false) and save. Nothing else needs editing.
-const TITLE='Climbing Areas';              // name shown in the top bar and browser tab
-const ABOUT_TEXT='';                       // short intro shown above the area list (leave blank for none)
-const HEADER_COLOR='#243b53';              // top bar colour
+const TITLE='Prince George Area Climbs';              // name shown in the top bar and browser tab
+const ABOUT_TEXT='Use at your own discretion. Info might be outdated, incomplete or just plain wrong. Climbing is dangerous so use your noodle.';                       // short intro shown above the area list (leave blank for none)
+const HEADER_COLOR='#93E9BE';              // top bar colour
 const MARKER_COLOR='#b3261e';              // colour of grade text in route lists
 const HIDE_UNVERIFIED=false;               // true = hide routes marked Unverified / Needs review
 const SHOW_STATUS_TAGS=true;               // true = show small status labels on routes
 // ---- DATA: paste published Google Sheet CSV links between the quotes ----
 // Leave blank to use the Areas.csv and Routes.csv files in this folder instead.
-const AREAS_URL='';
-const ROUTES_URL='';
-const TOPOS_URL='';          // optional: Topos tab (one row per topo photo)
-const TOPO_ROUTES_URL='';
+const AREAS_URL='https://docs.google.com/spreadsheets/d/e/2PACX-1vQCEMaOwar9UgSqCSFTdPYK4KiDOmCLPjX5V3aJblnTdYLprK9uR7OVkKpqqeP-iqBeS9KH5b5ylvW-/pub?gid=221886419&single=true&output=csv';
+const ROUTES_URL='https://docs.google.com/spreadsheets/d/e/2PACX-1vQCEMaOwar9UgSqCSFTdPYK4KiDOmCLPjX5V3aJblnTdYLprK9uR7OVkKpqqeP-iqBeS9KH5b5ylvW-/pub?gid=1698386841&single=true&output=csv';
+const TOPOS_URL='https://docs.google.com/spreadsheets/d/e/2PACX-1vQCEMaOwar9UgSqCSFTdPYK4KiDOmCLPjX5V3aJblnTdYLprK9uR7OVkKpqqeP-iqBeS9KH5b5ylvW-/pub?gid=1234353708&single=true&output=csv';          // optional: Topos tab (one row per topo photo)
+const TOPO_ROUTES_URL='https://docs.google.com/spreadsheets/d/e/2PACX-1vQCEMaOwar9UgSqCSFTdPYK4KiDOmCLPjX5V3aJblnTdYLprK9uR7OVkKpqqeP-iqBeS9KH5b5ylvW-/pub?gid=1559094142&single=true&output=csv';
 const PARKING_URL='';        // optional: Parking tab
 const APPROACHES_URL='';     // optional: Approaches tab
 // (optional trail lines: put a file named Trails.geojson next to index.html)    // optional: Topo_Routes tab (which route is which number/letter on which topo)
