@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Climbing Areas Map</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+<style>
+*{box-sizing:border-box}html,body{height:100%;margin:0;font-family:system-ui,sans-serif;color:#222}
+#top{padding:8px 12px;background:#243b53;color:#fff;display:flex;flex-wrap:wrap;gap:12px;align-items:center;font-size:13px}
+#top label{display:flex;gap:4px;align-items:center}#top select,#top input[type=text]{padding:3px;border-radius:4px;border:0}
+#top b{font-size:15px}#reset{cursor:pointer;padding:4px 10px;border-radius:4px;border:0}
+#wrap{display:flex;height:calc(100% - 46px)}#map{flex:1}
+#panel{width:430px;max-width:45%;overflow-y:auto;padding:14px;border-left:1px solid #ddd;background:#fafafa}
+h2{margin:0 0 4px}.muted{color:#666;font-size:13px}.access{background:#fff3d6;padding:8px;border-radius:6px;font-size:13px;margin:8px 0}
+details{background:#fff;border:1px solid #ddd;border-radius:6px;margin:8px 0;padding:8px}summary{cursor:pointer;font-weight:600}
+.route{border-top:1px solid #eee;padding:6px 0;font-size:13px}.grade{font-weight:700;color:var(--accent,#b3261e)}
+.topobox{background:#fff;border:1px solid #ddd;border-radius:6px;padding:8px;margin:8px 0;font-size:13px}.lbl{display:inline-block;min-width:22px;text-align:center;background:#243b53;color:#fff;border-radius:11px;font-weight:700;font-size:12px;padding:0 6px;margin-right:6px}.dim{opacity:.4}.topo{max-width:100%;border-radius:6px;margin-top:6px;border:1px solid #ddd;display:block}.tag{font-size:11px;background:#e8eef7;border-radius:4px;padding:1px 5px;margin-left:4px}
+.item{display:flex;justify-content:space-between;padding:8px;margin:4px 0;background:#fff;border:1px solid #ddd;border-radius:6px;cursor:pointer}
+.item:hover{background:#eef3fa}.item.off{opacity:.45}.back{cursor:pointer;color:#245;font-size:13px;margin-bottom:8px;display:inline-block}
+@media(max-width:700px){#wrap{flex-direction:column}#panel{width:100%;max-width:none;height:50%;border-left:0;border-top:1px solid #ddd}}
+</style></head><body>
+<div id="top"><b>Climbing areas</b>
+<span id="types"></span>
+<label>Rope grade <select id="rmin"></select> to <select id="rmax"></select></label>
+<label>Boulder <select id="bmin"></select> to <select id="bmax"></select></label>
+<label><input type="text" id="q" placeholder="Search route name"></label>
+<button id="reset">Reset</button></div>
+<div id="wrap"><div id="map"></div><div id="panel"></div></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script>
+// ============================== EASY SETTINGS ==============================
+// Change the text between the quotes (or true/false) and save. Nothing else needs editing.
+const TITLE='Climbing Areas';              // name shown in the top bar and browser tab
+const ABOUT_TEXT='';                       // short intro shown above the area list (leave blank for none)
+const HEADER_COLOR='#243b53';              // top bar colour
+const MARKER_COLOR='#b3261e';              // map markers and grade text colour
+const HIDE_UNVERIFIED=false;               // true = hide routes marked Unverified / Needs review
+const SHOW_STATUS_TAGS=true;               // true = show small status labels on routes
+// ---- DATA: paste published Google Sheet CSV links between the quotes ----
+// Leave blank to use the Areas.csv and Routes.csv files in this folder instead.
+const AREAS_URL='';
+const ROUTES_URL='';
+const TOPOS_URL='';          // optional: Topos tab (one row per topo photo)
+const TOPO_ROUTES_URL='';    // optional: Topo_Routes tab (which route is which number/letter on which topo)
+// =====================================================================================
+document.title=TITLE;
+document.querySelector('#top b').textContent=TITLE;
+document.getElementById('top').style.background=HEADER_COLOR;
+document.documentElement.style.setProperty('--accent',MARKER_COLOR);
+const NUM=['Latitude','Longitude','Height_m'];
+const clean=o=>{for(const k in o){let v=o[k];v=(v==null||String(v).trim()==='')?null:String(v).trim();if(v!==null&&NUM.includes(k))v=Number(v)||null;o[k]=v}return o};
+const load=f=>new Promise((ok,err)=>Papa.parse(f,{download:true,header:true,skipEmptyLines:true,complete:r=>ok(r.data.map(clean)),error:err}));
+const loadOpt=(f,key)=>load(f).then(d=>d.filter(r=>r[key])).catch(()=>[]);
+Promise.all([load(AREAS_URL||'Areas.csv'),load(ROUTES_URL||'Routes.csv'),loadOpt(TOPOS_URL||'Topos.csv','Topo_ID'),loadOpt(TOPO_ROUTES_URL||'Topo_Routes.csv','Topo_ID')]).then(([areas,routes,topoList,topoRoutes])=>{
+if(HIDE_UNVERIFIED)routes=routes.filter(r=>!/unverified|needs review/i.test((r.Data_Confidence||'')+' '+(r.Route_Status||'')));
+const esc=s=>s==null?'':String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const byId=Object.fromEntries(areas.map(a=>[a.Area_ID,a]));
+const kids=id=>areas.filter(x=>x.Parent_Area_ID===id);
+function score(g){ // returns {sys,val}
+  g=(g||'').trim(); let m;
+  if(m=g.match(/^V(\d+)/))return{sys:'V',val:+m[1]};
+  if(m=g.match(/^5\.(\d+)([abcd])?(\+)?/))return{sys:'Y',val:+m[1]*4+(m[2]?'abcd'.indexOf(m[2]):m[3]?2:1)};
+  return{sys:null};
+}
+const types=[...new Set(routes.map(r=>r.Climb_Type).filter(Boolean))].sort();
+const T=document.getElementById('types');
+T.innerHTML=types.map(t=>`<label><input type="checkbox" class="ty" value="${esc(t)}" checked>${esc(t)}</label> `).join('');
+const fill=(id,list,first)=>{document.getElementById(id).innerHTML=`<option value="">${first}</option>`+list.map(x=>`<option value="${x}">${x}</option>`).join('')};
+const yds=[];for(let n=3;n<=13;n++)yds.push('5.'+n);
+const vs=[];for(let n=0;n<=10;n++)vs.push('V'+n);
+fill('rmin',yds,'any');fill('rmax',yds,'any');fill('bmin',vs,'any');fill('bmax',vs,'any');
+const num=(id,sys)=>{const v=document.getElementById(id).value;return v?(sys==='V'?+v.slice(1):+v.slice(2)*4):null};
+function match(r){
+  const ty=[...document.querySelectorAll('.ty:checked')].map(x=>x.value);
+  if(!ty.includes(r.Climb_Type))return false;
+  const q=document.getElementById('q').value.trim().toLowerCase();
+  if(q&&!(r.Route_Name||'').toLowerCase().includes(q))return false;
+  const s=score(r.Grade);
+  const [lo,hi]=s.sys==='V'?[num('bmin','V'),num('bmax','V')]:[num('rmin','Y'),num('rmax','Y')];
+  if(lo===null&&hi===null)return true;
+  if(!s.sys)return false;
+  const step=s.sys==='V'?1:4;
+  return (lo===null||s.val>=lo)&&(hi===null||s.val<hi+step);
+}
+let ok=[],cnt={},okSet=new Set();
+function descendants(id){return kids(id).flatMap(k=>[k.Area_ID,...descendants(k.Area_ID)])}
+function recompute(){
+  ok=routes.filter(match);okSet=new Set(ok.map(r=>r.Route_ID));cnt={};
+  ok.forEach(r=>{cnt[r.Area_ID]=(cnt[r.Area_ID]||0)+1});
+  const total=id=>(cnt[id]||0)+descendants(id).reduce((n,d)=>n+(cnt[d]||0),0);
+  areas.forEach(a=>a._n=total(a.Area_ID));
+  markers.forEach(({a,m})=>{const on=a._n>0;m.setStyle({fillColor:on?MARKER_COLOR:'#999',fillOpacity:on?.9:.35,radius:on?7+Math.min(14,Math.sqrt(a._n)*1.5):6});m.setTooltipContent(`${a.Area_Name}: ${a._n} route(s)`)});
+  current?show(current):home();
+}
+function routeHtml(r){
+  const meta=[r.Climb_Type,r.Height_m?r.Height_m+' m':null,r.Gear,r.First_Ascent].filter(Boolean).map(esc).join(' · ');
+  return `<div class="route"><span class="grade">${esc(r.Grade)}</span> <b>${esc(r.Route_Name)}</b>${SHOW_STATUS_TAGS&&r.Route_Status?`<span class="tag">${esc(r.Route_Status)}</span>`:''}<div class="muted">${meta}</div><div>${esc(r.Description)}</div>${topoLinks(r)?`<div class="muted">Topo: ${topoLinks(r)}</div>`:''}</div>`;
+}
+const fixUrl=u=>{u=u.trim();const g=u.match(/drive\.google\.com\/file\/d\/([\w-]+)/)||u.match(/drive\.google\.com\/open\?id=([\w-]+)/);
+  if(g)return 'https://drive.google.com/thumbnail?id='+g[1]+'&sz=w1200';
+  return /^(https?:\/\/|[\w\-.\/ %]+$)/.test(u)?u:''};
+const routeById=Object.fromEntries(routes.map(r=>[r.Route_ID,r]));
+const topoLinks=r=>topoRoutes.filter(x=>x.Route_ID===r.Route_ID).map(x=>{const tp=topoList.find(q=>q.Topo_ID===x.Topo_ID);const u=tp?fixUrl(tp.Image_URL||''):'';return tp?(u?`<a href="${esc(u)}" target="_blank" rel="noopener">${esc(tp.Title||'Topo')} (${esc(x.Label)})</a>`:`${esc(tp.Title||'Topo')} (${esc(x.Label)})`):''}).filter(Boolean).join(', ');
+const topoBlock=areaId=>topoList.filter(tp=>tp.Area_ID===areaId).map(tp=>{
+  const rows=topoRoutes.filter(x=>x.Topo_ID===tp.Topo_ID).map(x=>({x,r:routeById[x.Route_ID]})).filter(o=>o.r).sort((p,q)=>String(p.x.Label).localeCompare(String(q.x.Label),undefined,{numeric:true}));
+  const u=fixUrl(tp.Image_URL||'');
+  return `<div class="topobox"><b>${esc(tp.Title||'Topo')}</b>${u?`<a href="${esc(u)}" target="_blank" rel="noopener"><img class="topo" loading="lazy" src="${esc(u)}" alt="Topo: ${esc(tp.Title||'')}"></a>`:''}`+
+   rows.map(o=>`<div class="${okSet.has(o.r.Route_ID)?'':'dim'}" style="margin-top:4px"><span class="lbl">${esc(o.x.Label)}</span>${esc(o.r.Route_Name)} <span class="grade">${esc(o.r.Grade)}</span></div>`).join('')+
+   (tp.Notes?`<div class="muted" style="margin-top:4px">${esc(tp.Notes)}</div>`:'')+`</div>`}).join('');
+const mine=id=>ok.filter(r=>r.Area_ID===id);
+function sub(a){const rs=mine(a.Area_ID);
+  return `<details ${rs.length?'':'style="opacity:.5"'}><summary>${esc(a.Area_Name)} (${rs.length})</summary>${a.Access_Description?`<div class="access">${esc(a.Access_Description)}</div>`:''}${topoBlock(a.Area_ID)}${rs.map(routeHtml).join('')||'<div class="muted">No matching routes.</div>'}</details>`}
+let current=null;
+const P=document.getElementById('panel');
+function show(a){
+  current=a;const subs=kids(a.Area_ID),rs=mine(a.Area_ID);
+  let h=`<span class="back" onclick="goHome()">&larr; All areas</span><h2>${esc(a.Area_Name)}</h2><div class="muted">${esc(a.Area_Level)} · ${a._n} matching route(s)</div>`;
+  if(a.Access_Description)h+=`<div class="access">${esc(a.Access_Description)}</div>`;
+  h+=topoBlock(a.Area_ID);
+  if(rs.length)h+=`<details open><summary>Routes here (${rs.length})</summary>${rs.map(routeHtml).join('')}</details>`;
+  h+=subs.map(sub).join('');P.innerHTML=h;
+}
+function home(){
+  const top=areas.filter(a=>!a.Parent_Area_ID).sort((x,y)=>y._n-x._n);
+  P.innerHTML=`<h2>Areas</h2>${ABOUT_TEXT?'<p>'+esc(ABOUT_TEXT)+'</p>':''}<p class="muted">${ok.length} matching route(s). Click a marker or an area below.</p>`+
+    top.map(a=>`<div class="item ${a._n?'':'off'}" onclick="pick('${a.Area_ID}')"><span>${esc(a.Area_Name)}${a.Latitude==null?' <span class="tag">not on map</span>':''}</span><b>${a._n}</b></div>`).join('');
+}
+window.goHome=()=>{current=null;home()};
+window.pick=id=>{const a=byId[id];show(a);if(a.Latitude!=null)map.setView([a.Latitude,a.Longitude],Math.max(map.getZoom(),10))};
+const map=L.map('map');
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'&copy; OpenStreetMap contributors'}).addTo(map);
+const markers=areas.filter(a=>a.Latitude!=null&&a.Longitude!=null).map(a=>({a,m:L.circleMarker([a.Latitude,a.Longitude],{color:'#fff',weight:2}).bindTooltip(a.Area_Name).on('click',()=>show(a)).addTo(map)}));
+map.fitBounds(L.featureGroup(markers.map(x=>x.m)).getBounds().pad(.15));
+document.querySelectorAll('#top select,#top input').forEach(e=>e.addEventListener('input',recompute));
+document.getElementById('reset').onclick=()=>{document.querySelectorAll('#top select').forEach(s=>s.value='');document.getElementById('q').value='';document.querySelectorAll('.ty').forEach(c=>c.checked=true);current=null;recompute()};
+recompute();
+}).catch(e=>{document.getElementById('panel').textContent='Could not load Areas.csv and Routes.csv. Open this page through a web host, not by double-clicking the file.'});
+</script></body></html>

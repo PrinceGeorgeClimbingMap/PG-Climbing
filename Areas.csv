@@ -1,0 +1,51 @@
+Area_ID,Area_Name,Parent_Area_ID,Area_Level,Latitude,Longitude,Access_Description
+A001,Evening Rock,,Main area,53.94116783,-122.8218167,Access requires entering Rolling Mix Concrete Ltd. property. Avoid during working hours. Technically trespassing but only if someone catches you. 
+A002,KOA,,Main area,53.87213105,-122.8357619,
+A003,Giscome,,Main area,54.07971674,-122.3628172,
+A004,Giscome Roadside Bluff,A003,Subarea,,,Directly across from the eastern parking pullout is the Roadside bluff
+A005,Giscome Front Bluffs,A003,Subarea,,,The Front Bluffs loom directly above the Roadside bluffs and are accessed by a trail through the boulderfield to the west or by bushwacking from Dance Park. 
+A006,Giscome Eagles Nest,A003,Subarea,,,"To get to Eagle's Nest go directly up the center of the quarry across from the huge pullout by the lake. One of the outlier routes, a 5.5/6, is clearly visible on your left. Follow orange flagged trail to a fork. The left fork goes to another short outlier route while the right fork continues to the Eagle's Nest. Rap down to whichever route you plan on doing."
+A007,Giscome Dance Park,A003,Subarea,,,
+A008,Giscome Shady Side,A003,Subarea,,,
+A009,Giscome Far Side Bluffs,A003,Subarea,,,
+A010,Giscome Boulders,A003,Subarea,54.09013,-122.35352,"The Giscome Boulders are approximately 30 km east of Prince
+George, British Columbia. The rock is finely-grained granodiorite, and
+features an abundance of crisp edges. While there are about 25
+sport and trad routes in the area (from 5.7 to .12c), you may find the
+50+ boulder problems (V0 to V9/10) to be more entertaining. The
+problems, most of which are found in the huge talus field, are of
+generally high quality. The Giscome Boulders have a suprisingly long
+season; they can be dry enough to climb on in March, and desperate
+boulderers have been known to drag a pad out to the boulders even
+after the snow has flown in November. The area can be roughly
+divided into three main areas; the Poultry Boulder Area, the
+Hideaway Area, and the Alley Area, where the bulk of the problems
+are found. To get to Giscome, drive east of Prince George on
+Highway 16, then turn north on Highway 93. Drive about halfway
+down the northwest shore of Eaglet Lake; the boulderfield will be on
+your left.            https://rockclimbpg.ca/data/documents/Giscome-Boulders.pdf"
+A011,Big Eddy,,Main area,54.02814947,-124.9692174,"Drive west on hwy 16 to about 2 km west of the community of Fraser Lake. Turn left on to Francois Lake Road and drive approximately 5 km. At the apex of a sweeping left bend in the road look for a small dirt road exiting off the right bank. Go 100 m down this road and park in a small clearing being sure to leave room for other users. Walk down the right fork (drive if you have high clearance vehicle) for another 100 m to a clearing. Look for a trail leaving the clearing on the left back corner. Follow the trail for about 20 minutes generally keeping right at intersections until the crag becomes visible on your left. From the top of the crag scramble down on skiers left and traverse back to the base of the routes on your right. The first route you will pass is # 9, You Otter Climb This"
+A012,Viking Slabs,,Main area,53.85806577,-121.5039797,
+A013,Teapot Mountain,,Main area,54.32713731,-122.6797679,
+A014,Upper Fraser/Fraser Forks,,Main area,54.09188429,-121.8924075,
+A015,Esler,,Main area,52.11059,-122.25813,
+A016,Hassler,,Main area,55.61328506,-121.9181704,
+A017,Purgatory,,Main area,53.90081347,-121.7375423,
+A018,Spirit Wall,A014,Subarea,,,
+A019,Mosquito Wall,A014,Subarea,,,
+A020,Ninja Wall,A014,Subarea,,,
+A021,Slabs Esler,A015,Subarea,,,
+A022,The Den,A015,Subarea,,,
+A023,Morning Sickness,A015,Subarea,,,
+A024,Poultry Boulder,A010,Boulder,,,
+A025,Roadside Boulder,A010,Boulder,,,
+A026,Hideaway Area,A010,Boulder,,,
+A027,Crap Boulder,A010,Boulder,,,
+A028,Alley Area,A010,Boulder,,,
+A029,Rack-A-Cracks Left,A013,Subarea,,,
+A030,Rack-A-Cracks Right,A013,Subarea,,,
+A031,Rocksicle,A013,Subarea,,,
+A032,Devil's Island,A017,Subarea,,,
+A033,Lost Souls Wall,A017,Subarea,,,
+A034,Reborn Wall,A017,Subarea,,,
+A035,Revolution Wall,A017,Subarea,,,
