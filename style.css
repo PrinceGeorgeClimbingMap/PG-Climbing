@@ -1,0 +1,74 @@
+:root {
+  --header: #243b53;     /* set from config.js */
+  --accent: #b3261e;     /* set from config.js */
+  --blue: #1565c0;
+  --border: #ddd;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; font-family: system-ui, sans-serif; color: #222; }
+body { display: flex; flex-direction: column; }
+
+/* ---------- top bar ---------- */
+#top { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 8px 12px; background: var(--header); color: #fff; font-size: 13px; }
+#top b { font-size: 15px; }
+#filters { display: contents; }
+#types { display: flex; flex-wrap: wrap; gap: 2px 12px; }
+#top label { display: flex; gap: 4px; align-items: center; }
+#top select, #top input[type=text] { padding: 3px; border: 0; border-radius: 4px; }
+#reset { padding: 4px 10px; border: 0; border-radius: 4px; cursor: pointer; }
+
+/* ---------- map + side panel ---------- */
+#wrap { flex: 1; min-height: 0; display: flex; }
+#map { flex: 1; }
+#panel { flex: none; width: 430px; max-width: 45%; padding: 14px; overflow-y: auto; border-left: 1px solid var(--border); background: #fafafa; }
+@media (max-width: 700px) {
+  #wrap { flex-direction: column; }
+  #panel { width: 100%; max-width: none; height: 50%; border-left: 0; border-top: 1px solid var(--border); }
+}
+
+/* ---------- map legend and markers ---------- */
+#legend { position: absolute; left: 10px; bottom: 24px; z-index: 1000; padding: 6px 8px; border-radius: 6px; background: rgba(255,255,255,.93); font-size: 11px; box-shadow: 0 1px 4px rgba(0,0,0,.3); }
+#legend i { display: inline-block; width: 10px; height: 10px; margin-right: 5px; border-radius: 50%; vertical-align: -1px; }
+#legend { cursor: pointer; }
+.legend-arrow { display: inline-block; margin-left: 4px; }
+#legend.collapsed .legend-body { display: none; }
+#legend.collapsed .legend-arrow { transform: rotate(-90deg); }
+
+.pin { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border-radius: 50%; box-shadow: 0 0 0 1.5px #fff, 0 1px 4px rgba(0,0,0,.5); }
+.pin span { width: 20px; height: 20px; border-radius: 50%; background: #fff; color: #222; font: 700 11px/20px system-ui; text-align: center; }
+.pin.none { opacity: .45; }
+.far .pin { transform: scale(.45); }
+.far .pin span { font-size: 0; }
+
+.pk { width: 20px; height: 20px; border-radius: 4px; background: var(--blue); color: #fff; font: 700 12px/20px system-ui; text-align: center; box-shadow: 0 0 0 1.5px #fff, 0 1px 3px rgba(0,0,0,.5); }
+.far .pk { display: none; }
+
+/* ---------- side panel content ---------- */
+h2 { margin: 0 0 4px; }
+.muted { color: #666; font-size: 13px; }
+.back { display: inline-block; margin-bottom: 8px; color: #245; font-size: 13px; cursor: pointer; }
+.access { margin: 8px 0; padding: 8px; border-radius: 6px; background: #fff3d6; font-size: 13px; }
+.tag { margin-left: 4px; padding: 1px 5px; border-radius: 4px; background: #e8eef7; font-size: 11px; }
+
+details { margin: 8px 0; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: #fff; }
+details.empty { opacity: .5; }
+summary { font-weight: 600; cursor: pointer; }
+
+.item { display: flex; justify-content: space-between; margin: 4px 0; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: #fff; cursor: pointer; }
+.item:hover { background: #eef3fa; }
+.item.off { opacity: .45; }
+
+.route { padding: 6px 0; border-top: 1px solid #eee; font-size: 13px; }
+.grade { font-weight: 700; color: var(--accent); }
+
+.info { margin: 8px 0; padding: 8px; border: 1px solid #cfe0f5; border-radius: 6px; background: #eef6ff; font-size: 13px; }
+.pkb { display: inline-block; width: 16px; height: 16px; border-radius: 3px; background: var(--blue); color: #fff; font: 700 11px/16px system-ui; text-align: center; }
+
+.photo { display: block; max-width: 100%; margin-top: 6px; border: 1px solid var(--border); border-radius: 6px; }
+.label { display: inline-block; min-width: 22px; margin-right: 6px; padding: 0 6px; border-radius: 11px; background: #243b53; color: #fff; font-size: 12px; font-weight: 700; text-align: center; }
+
+.topo-card { margin: 6px 0; padding: 6px; background: #fafafa; font-size: 13px; }
+.topo-card summary { font-weight: 500; }
+.topo-card .hl { border-radius: 4px; background: #fff3d6; font-weight: 700; }
+.topo-box { margin: 8px 0; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: #fff; font-size: 13px; }
