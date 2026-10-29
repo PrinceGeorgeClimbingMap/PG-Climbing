@@ -151,7 +151,7 @@ function home(){
     top.map(a=>`<div class="item ${a._n?'':'off'}" onclick="pick('${a.Area_ID}')"><span>${esc(a.Area_Name)}${a.Latitude==null?' <span class="tag">not on map</span>':''}</span><b>${a._n}</b></div>`).join('');
 }
 window.goHome=()=>{current=null;home()};
-window.pick=id=>{const a=byId[id];show(a);if(a.Latitude!=null)map.setView([a.Latitude,a.Longitude],Math.max(map.getZoom(),10))};
+window.pick=id=>{const a=byId[id];show(a);if(a.Latitude!=null)map.setView([a.Latitude,a.Longitude],Math.max(map.getZoom(),16))};
 const map=L.map('map');
 L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'&copy; OpenStreetMap contributors'}).addTo(map);
 const trailLayer=L.layerGroup().addTo(map),parkLayer=L.layerGroup().addTo(map);
