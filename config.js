@@ -37,5 +37,5 @@ window.CONFIG = {
   // ---- Trail lines ----
   // Names of the .geojson trail files you uploaded next to index.html.
   // Each line in a file needs an Area_ID field. Missing files are skipped.
-  trailFiles: ['eveningrocktrail.geojson', 'koatrail.geojson', 'upperfrasertrail.geojson']
+  trailFiles: ['eveningrocktrail.geojson', 'koatrail.geojson', 'upperfrasertrail.geojson','hasslertrail.geojson']
 };
