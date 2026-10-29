@@ -274,7 +274,7 @@
       const own = visibleByArea.get(a.Area_ID) || [];
       const kids = kidsOf.get(a.Area_ID) || [];
       const n = countIn(a.Area_ID);
-      return `<details class="${n ? '' : 'empty'}"><summary>${esc(a.Area_Name)} (${n})</summary>` +
+      return `<details data-sub="${esc(a.Area_ID)}" class="${n ? '' : 'empty'}"><summary>${esc(a.Area_Name)} (${n})</summary>` +
         (a.Access_Description ? `<div class="access">${esc(a.Access_Description)}</div>` : '') +
         infoHtml(a.Area_ID) + unlinkedToposHtml(a.Area_ID) +
         own.map(routeHtml).join('') + kids.map(subAreaHtml).join('') +
@@ -285,6 +285,7 @@
     function showHome() {
       current = null;
       trailLayer.clearLayers();
+      updateSubPins();
       const top = areas.filter(a => !a.Parent_Area_ID).map(a => ({ a, n: countIn(a.Area_ID) })).sort((x, y) => y.n - x.n);
       panel.innerHTML =
         `<h2>Areas</h2>   ${C.aboutText ? `<p>${esc(C.aboutText).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>')}</p>` : ''}<p class="muted">${visible.length} matching route(s). Click a marker or an area below.</p>` +
@@ -303,6 +304,7 @@
       panel.innerHTML = html;
       panel.scrollTop = 0;
       drawTrails(a);
+      updateSubPins();
     }
 
     function pick(id) {
@@ -312,22 +314,47 @@
       focusMap(a);
     }
 
-    // Zoom so the area's trail and approach lines are all in view.
-    // With no lines to show, zoom in on the area's map point instead.
+    // Zoom so the area's pin, its trail and approach lines, and its parking are all in view.
+    // With nothing else to show, zoom in on the area's map point instead.
     function focusMap(a) {
       const zoom = C.areaZoom || 16;
+      const ids = new Set([a.Area_ID, ...descendants.get(a.Area_ID)]);
+      const lotIds = new Set(approaches.filter(x => ids.has(x.Area_ID)).map(x => x.Parking_ID));
+      const points = [];
+      if (hasCoords(a)) points.push([a.Latitude, a.Longitude]);
+      parking.filter(p => hasCoords(p) && (ids.has(p.Area_ID) || lotIds.has(p.Parking_ID)))
+        .forEach(p => points.push([p.Latitude, p.Longitude]));
       let bounds = null;
       trailLayer.eachLayer(layer => {
         const b = layer.getBounds();
         bounds = bounds ? bounds.extend(b) : L.latLngBounds(b.getSouthWest(), b.getNorthEast());
       });
-      if (bounds && hasCoords(a)) bounds.extend([a.Latitude, a.Longitude]);
-      if (bounds && bounds.isValid()) {
+      points.forEach(pt => { bounds = bounds ? bounds.extend(pt) : L.latLngBounds(pt, pt); });
+      if (bounds && bounds.isValid() && !bounds.getSouthWest().equals(bounds.getNorthEast())) {
         map.fitBounds(bounds, { padding: [50, 50], maxZoom: zoom + 1 });
-      } else if (hasCoords(a)) {
-        map.setView([a.Latitude, a.Longitude], Math.max(map.getZoom(), zoom));   // never zooms back out
+      } else if (points.length) {
+        map.setView(points[0], Math.max(map.getZoom(), zoom));   // never zooms back out
       }
     }
+
+    // Opening a sub area in the panel zooms the map to it and shows only its trails.
+    // Closing it goes back to the next open sub area, or to the main area.
+    function focusSub(a) {
+      drawTrails(a);
+      focusMap(a);
+    }
+    panel.addEventListener('toggle', e => {
+      const box = e.target;
+      if (!box.matches || !box.matches('details[data-sub]')) return;
+      if (box.open) {
+        const a = areaById.get(box.dataset.sub);
+        if (a) focusSub(a);
+      } else if (current) {
+        const stillOpen = [...panel.querySelectorAll('details[data-sub][open]')].pop();
+        const a = stillOpen && areaById.get(stillOpen.dataset.sub);
+        focusSub(a || current);
+      }
+    }, true);
 
     panel.addEventListener('click', e => {
       if (e.target.closest('[data-home]')) return showHome();
@@ -391,13 +418,20 @@
     }
 
     // ---- parking markers ----
+    // Parking for a sub area only shows while its main area (or one of its sub areas) is open.
     computeVisible();
+    const subParkLayer = L.layerGroup().addTo(parkLayer);
+    const subParking = [];
     parking.filter(hasCoords).forEach(p => {
-      L.marker([p.Latitude, p.Longitude], { icon: L.divIcon({ className: '', iconSize: [20, 20], iconAnchor: [10, 10], html: '<div class="pk">P</div>' }) })
+      const area = areaById.get(p.Area_ID);
+      const root = area && rootOf(area);
+      const alwaysShown = !area || !area.Parent_Area_ID || !hasCoords(root);
+      const marker = L.marker([p.Latitude, p.Longitude], { icon: L.divIcon({ className: '', iconSize: [20, 20], iconAnchor: [10, 10], html: '<div class="pk">P</div>' }) })
         .bindTooltip(esc(p.Name || 'Parking'))
         .bindPopup(`<b>${esc(p.Name || 'Parking')}</b><br>${esc(p.Notes)}<br>${photos(p.Photo_URL)}<a href="${esc(mapsLink(p.Latitude, p.Longitude))}" target="_blank" rel="noopener">Open in Maps</a>`, { maxWidth: 260 })
-        .on('click', () => { trailLayer.clearLayers(); drawApproaches(approaches.filter(x => x.Parking_ID === p.Parking_ID)); })
-        .addTo(parkLayer);
+        .on('click', () => { trailLayer.clearLayers(); drawApproaches(approaches.filter(x => x.Parking_ID === p.Parking_ID)); });
+      if (alwaysShown) marker.addTo(parkLayer);
+      else subParking.push({ marker, root: root.Area_ID });
     });
     $('parking-toggle').addEventListener('change', e => e.target.checked ? parkLayer.addTo(map) : map.removeLayer(parkLayer));
 
@@ -424,12 +458,39 @@
     }
 
     const tooltipFor = a => esc(`${a.Area_Name}: ${countIn(a.Area_ID)} route(s)`);
-    const markers = areas.filter(hasCoords).map(a => ({
-      area: a,
-      marker: L.marker([a.Latitude, a.Longitude], { icon: pinIcon(a) }).bindTooltip(tooltipFor(a)).on('click', () => pick(a.Area_ID)).addTo(map)
-    }));
+    // Main area at the top of an area's family tree.
+    function rootOf(a) {
+      for (let i = 0; a && a.Parent_Area_ID && i < 10; i++) {
+        const up = areaById.get(a.Parent_Area_ID);
+        if (!up) break;
+        a = up;
+      }
+      return a;
+    }
 
-    if (markers.length) map.fitBounds(L.featureGroup(markers.map(m => m.marker)).getBounds().pad(0.15));
+    // Sub area pins only show while their main area (or one of its sub areas) is open.
+    // A sub area whose main area has no map point is always shown, so it can still be found.
+    const subPinLayer = L.layerGroup().addTo(map);
+    const markers = areas.filter(hasCoords).map(a => {
+      const marker = L.marker([a.Latitude, a.Longitude], { icon: pinIcon(a) }).bindTooltip(tooltipFor(a)).on('click', () => pick(a.Area_ID));
+      const root = rootOf(a);
+      const alwaysShown = !a.Parent_Area_ID || !hasCoords(root);
+      marker.addTo(alwaysShown ? map : subPinLayer);
+      return { area: a, marker, root: root.Area_ID, alwaysShown };
+    });
+
+    function updateSubPins() {
+      subPinLayer.clearLayers();
+      subParkLayer.clearLayers();
+      if (!current) return;
+      const open = rootOf(current).Area_ID;
+      markers.filter(m => !m.alwaysShown && m.root === open).forEach(m => m.marker.addTo(subPinLayer));
+      subParking.filter(m => m.root === open).forEach(m => m.marker.addTo(subParkLayer));
+    }
+    updateSubPins();
+
+    const mainPins = markers.filter(m => m.alwaysShown);
+    if (mainPins.length) map.fitBounds(L.featureGroup(mainPins.map(m => m.marker)).getBounds().pad(0.15));
 
     // Shrink the pins when zoomed far out so they do not crowd each other.
     const updateZoomClass = () => $('map').classList.toggle('far', map.getZoom() < 11);
