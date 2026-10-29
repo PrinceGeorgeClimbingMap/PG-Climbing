@@ -9,7 +9,7 @@ window.CONFIG = {
 
   // ---- Look and wording ----
   title: 'Prince George Area Climbs',          // name in the top bar and browser tab
-  aboutText: `Use at your own discretion. Info might be outdated, incomplete or just plain wrong. Climbing is dangerous so use your noodle.`,  // intro above the area list (leave blank for none)
+  aboutText: `Use at your own discretion. Info might be outdated, incomplete or just plain wrong. Climbing is dangerous so use your noodle. Notice something wrong, missing, or incomplete. Make comments on this file to see changes. Only making changes from TRVE PG CLIMBERS. Can add topo pics, rorute descriptions, new areas, name changes, etc. https://docs.google.com/spreadsheets/d/e/2PACX-1vQCEMaOwar9UgSqCSFTdPYK4KiDOmCLPjX5V3aJblnTdYLprK9uR7OVkKpqqeP-iqBeS9KH5b5ylvW-/pubhtml`,  // intro above the area list (leave blank for none)
   headerColor: '#001E13',                      // top bar colour
   gradeTextColor: '#b3261e',                   // colour of the grade in route lists
 
