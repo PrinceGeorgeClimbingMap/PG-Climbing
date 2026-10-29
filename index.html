@@ -54,8 +54,9 @@ const TOPOS_URL='https://docs.google.com/spreadsheets/d/e/2PACX-1vQCEMaOwar9UgSq
 const TOPO_ROUTES_URL='https://docs.google.com/spreadsheets/d/e/2PACX-1vQCEMaOwar9UgSqCSFTdPYK4KiDOmCLPjX5V3aJblnTdYLprK9uR7OVkKpqqeP-iqBeS9KH5b5ylvW-/pub?gid=1559094142&single=true&output=csv';
 const PARKING_URL='';        // optional: Parking tab
 const APPROACHES_URL='';     // optional: Approaches tab
-// (optional trail lines: put a file named Trails.geojson next to index.html)    // optional: Topo_Routes tab (which route is which number/letter on which topo)
-// =====================================================================================
+// Trail lines: list every trail file you uploaded to GitHub, each in quotes, separated by commas.
+// Each file's lines need an Area_ID field. Missing files are skipped.
+const TRAIL_FILES=['eveningrocktrail.geojson'];// =====================================================================================
 document.title=TITLE;
 document.querySelector('#top b').textContent=TITLE;
 document.getElementById('top').style.background=HEADER_COLOR;
@@ -64,7 +65,7 @@ const NUM=['Latitude','Longitude','Height_m','End_Latitude','End_Longitude'];
 const clean=o=>{for(const k in o){let v=o[k];v=(v==null||String(v).trim()==='')?null:String(v).trim();if(v!==null&&NUM.includes(k))v=Number(v)||null;o[k]=v}return o};
 const load=f=>new Promise((ok,err)=>Papa.parse(f,{download:true,header:true,skipEmptyLines:true,complete:r=>ok(r.data.map(clean)),error:err}));
 const loadOpt=(f,key)=>load(f).then(d=>d.filter(r=>r[key])).catch(()=>[]);
-Promise.all([load(AREAS_URL||'Areas.csv'),load(ROUTES_URL||'Routes.csv'),loadOpt(TOPOS_URL||'Topos.csv','Topo_ID'),loadOpt(TOPO_ROUTES_URL||'Topo_Routes.csv','Topo_ID'),loadOpt(PARKING_URL||'Parking.csv','Parking_ID'),loadOpt(APPROACHES_URL||'Approaches.csv','Approach_ID'),fetch('Trails.geojson').then(r=>r.ok?r.json():null).catch(()=>null)]).then(([areas,routes,topoList,topoRoutes,parkingList,approachList,trails])=>{
+Promise.all([load(AREAS_URL||'Areas.csv'),load(ROUTES_URL||'Routes.csv'),loadOpt(TOPOS_URL||'Topos.csv','Topo_ID'),loadOpt(TOPO_ROUTES_URL||'Topo_Routes.csv','Topo_ID'),loadOpt(PARKING_URL||'Parking.csv','Parking_ID'),loadOpt(APPROACHES_URL||'Approaches.csv','Approach_ID'),Promise.all(TRAIL_FILES.map(f=>fetch(f).then(r=>r.ok?r.json():null).catch(()=>null))).then(a=>({type:'FeatureCollection',features:a.filter(Boolean).flatMap(g=>g.type==='FeatureCollection'?g.features:g.type==='Feature'?[g]:[])}))]).then(([areas,routes,topoList,topoRoutes,parkingList,approachList,trails])=>{
 if(HIDE_UNVERIFIED)routes=routes.filter(r=>!/unverified|needs review/i.test((r.Data_Confidence||'')+' '+(r.Route_Status||'')));
 const esc=s=>s==null?'':String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const byId=Object.fromEntries(areas.map(a=>[a.Area_ID,a]));
