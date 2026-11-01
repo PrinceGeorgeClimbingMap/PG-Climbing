@@ -1,0 +1,26 @@
+{
+ "type": "FeatureCollection",
+ "name": "vikingslabstrail",
+ "features": [
+  {
+   "type": "Feature",
+   "properties": {
+    "Name": "Viking Slabs approach trail",
+    "Area_ID": "A012"
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -121.5155035,
+      53.8621926
+     ],
+     [
+      -121.5115503,
+      53.8618892
+     ]
+    ]
+   }
+  }
+ ]
+}
