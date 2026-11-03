@@ -26,6 +26,7 @@ window.CONFIG = {
   // ---- Google Sheet links (File > Share > Publish to web > pick a tab > CSV) ----
   // Leave a link blank to use the matching .csv file in this folder instead.
   sheets: {
+    pitches: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQCEMaOwar9UgSqCSFTdPYK4KiDOmCLPjX5V3aJblnTdYLprK9uR7OVkKpqqeP-iqBeS9KH5b5ylvW-/pub?gid=1357619078&single=true&output=csv',
     areas:      'https://docs.google.com/spreadsheets/d/e/2PACX-1vQCEMaOwar9UgSqCSFTdPYK4KiDOmCLPjX5V3aJblnTdYLprK9uR7OVkKpqqeP-iqBeS9KH5b5ylvW-/pub?gid=221886419&single=true&output=csv',
     routes:     'https://docs.google.com/spreadsheets/d/e/2PACX-1vQCEMaOwar9UgSqCSFTdPYK4KiDOmCLPjX5V3aJblnTdYLprK9uR7OVkKpqqeP-iqBeS9KH5b5ylvW-/pub?gid=1698386841&single=true&output=csv',
     topos:      'https://docs.google.com/spreadsheets/d/e/2PACX-1vQCEMaOwar9UgSqCSFTdPYK4KiDOmCLPjX5V3aJblnTdYLprK9uR7OVkKpqqeP-iqBeS9KH5b5ylvW-/pub?gid=1234353708&single=true&output=csv',
