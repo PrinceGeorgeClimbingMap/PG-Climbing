@@ -114,13 +114,14 @@
     loadOptionalCsv(SHEETS.topoRoutes || 'Topo_Routes.csv', 'Topo_ID'),
     loadOptionalCsv(SHEETS.parking || 'Parking.csv', 'Parking_ID'),
     loadOptionalCsv(SHEETS.approaches || 'Approaches.csv', 'Approach_ID'),
+    loadOptionalCsv(SHEETS.pitches || 'Pitches.csv', 'Route_ID'),
     loadTrails(C.trailFiles || [])
   ]).then(start).catch(err => {
     console.error(err);
     $('panel').textContent = 'Could not load the site data. Check the links in config.js, or make sure Areas.csv and Routes.csv sit next to index.html. If you opened this file by double-clicking it, put it on a web host instead.';
   });
 
-  function start([areas, routes, topos, topoRoutes, parking, approaches, trailFeatures]) {
+  function start([areas, routes, topos, topoRoutes, parking, approaches, pitchRows, trailFeatures]) {
     if (C.hideUnverified) {
       routes = routes.filter(r => !/unverified|needs review/i.test((r.Data_Confidence || '') + ' ' + (r.Route_Status || '')));
     }
@@ -173,6 +174,17 @@
       if (route && topo) addTo(toposOfRoute, x.Route_ID, { topo, label: x.Label });
     });
     routesOnTopo.forEach(list => list.sort(byLabel));
+
+    // ---- multi-pitch: rows in the Pitches tab, grouped by route and sorted by pitch number ----
+    const pitchesOf = new Map();
+    pitchRows.forEach(x => addTo(pitchesOf, x.Route_ID, x));
+    pitchesOf.forEach(list => list.sort((a, b) => (parseFloat(a.Pitch) || 0) - (parseFloat(b.Pitch) || 0)));
+    // A multi-pitch route with no grade of its own takes its hardest pitch.
+    const gradeRank = t => { const g = parseGrade(t); return g.sys ? (g.sys === 'V' ? 100 : 0) + g.val : -1; };
+    routes.forEach(r => {
+      const list = pitchesOf.get(r.Route_ID);
+      if (!r.Grade && list) r.Grade = list.map(x => x.Grade).filter(Boolean).sort((a, b) => gradeRank(b) - gradeRank(a))[0] || null;
+    });
 
     // ---- parking ----
     const lotById = new Map(parking.map(p => [p.Parking_ID, p]));
@@ -252,10 +264,27 @@
       .map(t => `<div class="topo-box"><b>${esc(t.title || 'Topo')}</b>${topoHeader(t)}${photo(t.image, 'Topo: ' + (t.title || ''))}${topoFooter(t)}</div>`)
       .join('');
 
+    const metres = v => v == null ? null : /^\d+(\.\d+)?$/.test(String(v)) ? v + ' m' : String(v);
+
+    // Pitch-by-pitch list for a multi-pitch route (collapsed; the summary shows each pitch's grade).
+    function pitchesHtml(r) {
+      const list = pitchesOf.get(r.Route_ID);
+      if (!list || !list.length) return '';
+      const grades = list.map(x => x.Grade || '?').map(esc).join(', ');
+      const rows = list.map((x, i) => {
+        const head = [x.Grade, metres(x.Length_m)].filter(Boolean).map(esc).join(' · ');
+        return `<div class="pitch"><b>P${esc(x.Pitch || i + 1)}</b>${head ? ` <span class="grade">${head}</span>` : ''}${x.Description ? `<div>${esc(x.Description)}</div>` : ''}</div>`;
+      }).join('');
+      return `<details class="pitches"><summary>${list.length} pitches: ${grades}</summary>${rows}</details>`;
+    }
+
     function routeHtml(r) {
-      const meta = [r.Climb_Type, r.Height_m ? r.Height_m + ' m' : null, r.Gear, r.First_Ascent].filter(Boolean).map(esc).join(' · ');
+      const list = pitchesOf.get(r.Route_ID);
+      const pitchCount = list && list.length > 1 ? list.length + ' pitches' : null;
+      const meta = [r.Climb_Type, metres(r.Height_m), pitchCount, r.Gear, r.First_Ascent].filter(Boolean).map(esc).join(' · ');
       const status = C.showStatusTags && r.Route_Status ? `<span class="tag">${esc(r.Route_Status)}</span>` : '';
-      return `<div class="route"><span class="grade">${esc(r.Grade)}</span> <b>${esc(r.Route_Name)}</b>${status}<div class="muted">${meta}</div><div>${esc(r.Description)}</div>${topoCardsHtml(r)}</div>`;
+      const descent = r.Descent ? `<div class="descent"><b>Descent:</b> ${esc(r.Descent)}</div>` : '';
+      return `<div class="route"><span class="grade">${esc(r.Grade)}</span> <b>${esc(r.Route_Name)}</b>${status}<div class="muted">${meta}</div><div>${esc(r.Description)}</div>${pitchesHtml(r)}${descent}${topoCardsHtml(r)}</div>`;
     }
 
     // Parking spots and approaches for an area.
@@ -415,6 +444,10 @@
         L.geoJSON({ type: 'FeatureCollection', features }, { style: { color: '#1565c0', weight: 3, dashArray: '6 6' } }).addTo(trailLayer);
       }
       drawApproaches(approaches.filter(x => ids.has(x.Area_ID)));
+      // A sub area with no trail of its own shows its main area's trail instead.
+      if (!trailLayer.getLayers().length && a.Parent_Area_ID && areaById.get(a.Parent_Area_ID)) {
+        drawTrails(areaById.get(a.Parent_Area_ID));
+      }
     }
 
     // ---- parking markers ----

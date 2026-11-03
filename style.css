@@ -72,3 +72,9 @@ summary { font-weight: 600; cursor: pointer; }
 .topo-card summary { font-weight: 500; }
 .topo-card .hl { border-radius: 4px; background: #fff3d6; font-weight: 700; }
 .topo-box { margin: 8px 0; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: #fff; font-size: 13px; }
+
+/* multi-pitch */
+.pitches { margin: 6px 0; padding: 6px; background: #fafafa; font-size: 13px; }
+.pitches summary { font-weight: 500; }
+.pitch { margin-top: 6px; }
+.descent { margin-top: 4px; font-size: 13px; }
