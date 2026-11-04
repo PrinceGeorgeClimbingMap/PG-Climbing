@@ -203,12 +203,18 @@
     fillSelect('rmin', ropeGrades); fillSelect('rmax', ropeGrades);
     fillSelect('bmin', boulderGrades); fillSelect('bmax', boulderGrades);
 
+    // A route counts as multi-pitch when it has two or more rows in the Pitches tab.
+    const isMulti = r => (pitchesOf.get(r.Route_ID) || []).length > 1;
+    // No multi-pitch routes yet: hide the checkbox.
+    if ($('multi-label') && !routes.some(isMulti)) $('multi-label').style.display = 'none';
+
     function readFilters() {
       const rope = id => $(id).value ? +$(id).value.slice(2) * 4 : null;
       const boulder = id => $(id).value ? +$(id).value.slice(1) : null;
       return {
         types: new Set([...document.querySelectorAll('.type-box:checked')].map(x => x.value)),
         text: $('q').value.trim().toLowerCase(),
+        multi: $('multi') ? $('multi').checked : false,
         rope: [rope('rmin'), rope('rmax')],
         boulder: [boulder('bmin'), boulder('bmax')]
       };
@@ -217,6 +223,7 @@
     function matches(route, f) {
       if (!f.types.has(route.Climb_Type || NO_TYPE)) return false;
       if (f.text && !(route.Route_Name || '').toLowerCase().includes(f.text)) return false;
+      if (f.multi && !isMulti(route)) return false;
       const g = parseGrade(route.Grade);
       const [lo, hi] = g.sys === 'V' ? f.boulder : f.rope;
       if (lo === null && hi === null) return true;
@@ -552,6 +559,7 @@
     $('reset').addEventListener('click', () => {
       document.querySelectorAll('#filters select').forEach(s => { s.value = ''; });
       $('q').value = '';
+      if ($('multi')) $('multi').checked = false;
       document.querySelectorAll('.type-box').forEach(c => { c.checked = true; });
       current = null;
       refresh();
