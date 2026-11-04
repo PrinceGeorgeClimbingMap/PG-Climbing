@@ -322,7 +322,6 @@
       current = null;
       trailLayer.clearLayers();
       updateSubPins();
-      updateBackControl();
       const top = areas.filter(a => !a.Parent_Area_ID).map(a => ({ a, n: countIn(a.Area_ID) })).sort((x, y) => y.n - x.n);
       panel.innerHTML =
         `<h2>Areas</h2>   ${C.aboutText ? `<p>${esc(C.aboutText).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>')}</p>` : ''}<p class="muted">${visible.length} matching route(s). Click a marker or an area below.</p>` +
@@ -342,7 +341,6 @@
       panel.scrollTop = 0;
       drawTrails(a);
       updateSubPins();
-      updateBackControl();
     }
 
     function pick(id) {
@@ -542,21 +540,6 @@
       zoomHome();
     }
 
-    // A "Back to all areas" button on the map too, shown while an area is open.
-    const BackControl = L.Control.extend({
-      options: { position: 'topleft' },
-      onAdd() {
-        const btn = L.DomUtil.create('button', 'map-back');
-        btn.type = 'button';
-        btn.innerHTML = '&larr; All areas';
-        btn.title = 'Back to all areas';
-        L.DomEvent.disableClickPropagation(btn);
-        L.DomEvent.on(btn, 'click', goHome);
-        return btn;
-      }
-    });
-    const backControl = new BackControl().addTo(map);
-    const updateBackControl = () => backControl.getContainer().classList.toggle('show', !!current);
 
     // Shrink the pins when zoomed far out so they do not crowd each other.
     const updateZoomClass = () => $('map').classList.toggle('far', map.getZoom() < 11);
