@@ -322,6 +322,7 @@
       current = null;
       trailLayer.clearLayers();
       updateSubPins();
+      updateBackControl();
       const top = areas.filter(a => !a.Parent_Area_ID).map(a => ({ a, n: countIn(a.Area_ID) })).sort((x, y) => y.n - x.n);
       panel.innerHTML =
         `<h2>Areas</h2>   ${C.aboutText ? `<p>${esc(C.aboutText).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>')}</p>` : ''}<p class="muted">${visible.length} matching route(s). Click a marker or an area below.</p>` +
@@ -332,7 +333,7 @@
     function showArea(a) {
       current = a;
       const own = visibleByArea.get(a.Area_ID) || [];
-      let html = `<span class="back" data-home>&larr; All areas</span><h2>${esc(a.Area_Name)}</h2><div class="muted">${esc(a.Area_Level)} · ${countIn(a.Area_ID)} matching route(s)</div>`;
+      let html = `<button type="button" class="back" data-home>&larr; Back to all areas</button><h2>${esc(a.Area_Name)}</h2><div class="muted">${esc(a.Area_Level)} · ${countIn(a.Area_ID)} matching route(s)</div>`;
       if (a.Access_Description) html += `<div class="access">${esc(a.Access_Description)}</div>`;
       html += infoHtml(a.Area_ID) + unlinkedToposHtml(a.Area_ID);
       if (own.length) html += `<details open><summary>Routes here (${own.length})</summary>${own.map(routeHtml).join('')}</details>`;
@@ -341,6 +342,7 @@
       panel.scrollTop = 0;
       drawTrails(a);
       updateSubPins();
+      updateBackControl();
     }
 
     function pick(id) {
@@ -393,7 +395,7 @@
     }, true);
 
     panel.addEventListener('click', e => {
-      if (e.target.closest('[data-home]')) return showHome();
+      if (e.target.closest('[data-home]')) return goHome();
       const item = e.target.closest('[data-area]');
       if (item) pick(item.dataset.area);
     });
@@ -529,8 +531,32 @@
     }
     updateSubPins();
 
+    // The starting view: every main area in sight. "Back to all areas" and Reset return here.
     const mainPins = markers.filter(m => m.alwaysShown);
-    if (mainPins.length) map.fitBounds(L.featureGroup(mainPins.map(m => m.marker)).getBounds().pad(0.15));
+    const homeBounds = mainPins.length ? L.featureGroup(mainPins.map(m => m.marker)).getBounds().pad(0.15) : null;
+    const zoomHome = () => { if (homeBounds) map.fitBounds(homeBounds); };
+    zoomHome();
+
+    function goHome() {
+      showHome();
+      zoomHome();
+    }
+
+    // A "Back to all areas" button on the map too, shown while an area is open.
+    const BackControl = L.Control.extend({
+      options: { position: 'topleft' },
+      onAdd() {
+        const btn = L.DomUtil.create('button', 'map-back');
+        btn.type = 'button';
+        btn.innerHTML = '&larr; All areas';
+        btn.title = 'Back to all areas';
+        L.DomEvent.disableClickPropagation(btn);
+        L.DomEvent.on(btn, 'click', goHome);
+        return btn;
+      }
+    });
+    const backControl = new BackControl().addTo(map);
+    const updateBackControl = () => backControl.getContainer().classList.toggle('show', !!current);
 
     // Shrink the pins when zoomed far out so they do not crowd each other.
     const updateZoomClass = () => $('map').classList.toggle('far', map.getZoom() < 11);
@@ -563,6 +589,7 @@
       document.querySelectorAll('.type-box').forEach(c => { c.checked = true; });
       current = null;
       refresh();
+      zoomHome();
     });
 
     showHome();
