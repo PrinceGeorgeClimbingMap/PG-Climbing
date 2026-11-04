@@ -50,7 +50,6 @@ h2 { margin: 0 0 4px; }
 .back { position: sticky; top: -14px; z-index: 5; display: block; width: 100%; margin: -14px 0 10px; padding: 10px 12px; border: 0; border-radius: 0 0 8px 8px; background: #d32f2f; color: #fff; font: 700 15px system-ui; text-align: left; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,.25); }
 .back:hover { filter: brightness(1.2); }
 .map-back { display: none; padding: 7px 12px; border: 2px solid rgba(0,0,0,.2); border-radius: 6px; background: #d32f2f; color: #fff; font: 700 14px system-ui; cursor: pointer; background-clip: padding-box; }
-.map-back.show { display: block; }
 .map-back:hover { filter: brightness(1.2); }
 .access { margin: 8px 0; padding: 8px; border-radius: 6px; background: #fff3d6; font-size: 13px; }
 .tag { margin-left: 4px; padding: 1px 5px; border-radius: 4px; background: #e8eef7; font-size: 11px; }
