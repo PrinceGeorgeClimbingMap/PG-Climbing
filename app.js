@@ -519,13 +519,33 @@
       return { area: a, marker, root: root.Area_ID, alwaysShown };
     });
 
+    // True when every route in a main area sits in a sub area that has its own pin,
+    // so the main pin adds nothing once the sub area pins are showing.
+    function allRoutesOnSubPins(rootId) {
+      const ids = new Set([rootId, ...descendants.get(rootId)]);
+      const inArea = routes.filter(r => ids.has(r.Area_ID));
+      return inArea.length > 0 && inArea.every(r => {
+        for (let a = areaById.get(r.Area_ID), i = 0; a && a.Area_ID !== rootId && i < 10; a = areaById.get(a.Parent_Area_ID), i++) {
+          if (hasCoords(a)) return true;
+        }
+        return false;
+      });
+    }
+
     function updateSubPins() {
       subPinLayer.clearLayers();
       subParkLayer.clearLayers();
-      if (!current) return;
-      const open = rootOf(current).Area_ID;
-      markers.filter(m => !m.alwaysShown && m.root === open).forEach(m => m.marker.addTo(subPinLayer));
-      subParking.filter(m => m.root === open).forEach(m => m.marker.addTo(subParkLayer));
+      const open = current ? rootOf(current).Area_ID : null;
+      const subPins = open ? markers.filter(m => !m.alwaysShown && m.root === open) : [];
+      subPins.forEach(m => m.marker.addTo(subPinLayer));
+      if (open) subParking.filter(m => m.root === open).forEach(m => m.marker.addTo(subParkLayer));
+      // While an area is open, hide its own pin when all its routes are on sub area pins.
+      // It comes back on "Back to all areas".
+      markers.filter(m => m.alwaysShown && !m.area.Parent_Area_ID).forEach(m => {
+        const hide = m.area.Area_ID === open && subPins.length > 0 && allRoutesOnSubPins(open);
+        if (hide) map.removeLayer(m.marker);
+        else if (!map.hasLayer(m.marker)) m.marker.addTo(map);
+      });
     }
     updateSubPins();
 
