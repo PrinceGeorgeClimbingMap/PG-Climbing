@@ -280,7 +280,7 @@
       const grades = list.map(x => x.Grade || '?').map(esc).join(', ');
       const rows = list.map((x, i) => {
         const head = [x.Grade, metres(x.Length_m)].filter(Boolean).map(esc).join(' · ');
-        return `<div class="pitch"><b>P${esc(x.Pitch || i + 1)}</b>${head ? ` <span class="grade">${head}</span>` : ''}${x.Description ? `<div>${esc(x.Description)}</div>` : ''}</div>`;
+        return `<div class="pitch"><b>P${esc(x.Pitch || i + 1)}</b>${head ? ` <span class="grade">${head}</span>` : ''}${x.Description ? `<div>${esc(x.Description)}</div>` : ''}${photos(x.Photo_URL)}</div>`;
       }).join('');
       return `<details class="pitches"><summary>${list.length} pitches: ${grades}</summary>${rows}</details>`;
     }
