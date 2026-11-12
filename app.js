@@ -476,10 +476,14 @@
     $('parking-toggle').addEventListener('change', e => e.target.checked ? parkLayer.addTo(map) : map.removeLayer(parkLayer));
 
     // ---- area pins: number = routes, ring = mix of grades ----
-    function pinIcon(a) {
+    // only (optional): count just the routes it returns true for.
+    function pinIcon(a, only) {
       const perBand = new Array(7).fill(0);
+      let count = 0;
       for (const id of [a.Area_ID, ...descendants.get(a.Area_ID)]) {
         for (const r of visibleByArea.get(id) || []) {
+          if (only && !only(r)) continue;
+          count++;
           const b = gradeBand(r.Grade);
           if (b >= 0) perBand[b]++;
         }
@@ -493,7 +497,7 @@
         used += n;
       });
       const ring = total ? `conic-gradient(${stops.join(',')})` : '#999';
-      const n = countIn(a.Area_ID);
+      const n = count;
       return L.divIcon({ className: '', iconSize: [30, 30], iconAnchor: [15, 15], html: `<div class="pin${n ? '' : ' none'}" style="background:${ring}"><span>${n}</span></div>` });
     }
 
@@ -521,15 +525,12 @@
 
     // True when every route in a main area sits in a sub area that has its own pin,
     // so the main pin adds nothing once the sub area pins are showing.
-    function allRoutesOnSubPins(rootId) {
-      const ids = new Set([rootId, ...descendants.get(rootId)]);
-      const inArea = routes.filter(r => ids.has(r.Area_ID));
-      return inArea.length > 0 && inArea.every(r => {
-        for (let a = areaById.get(r.Area_ID), i = 0; a && a.Area_ID !== rootId && i < 10; a = areaById.get(a.Parent_Area_ID), i++) {
-          if (hasCoords(a)) return true;
-        }
-        return false;
-      });
+    // Does this route already show on a sub area pin (its area, or a parent below the main area, has a map point)?
+    function onSubPin(r, rootId) {
+      for (let a = areaById.get(r.Area_ID), i = 0; a && a.Area_ID !== rootId && i < 10; a = areaById.get(a.Parent_Area_ID), i++) {
+        if (hasCoords(a)) return true;
+      }
+      return false;
     }
 
     function updateSubPins() {
@@ -539,12 +540,20 @@
       const subPins = open ? markers.filter(m => !m.alwaysShown && m.root === open) : [];
       subPins.forEach(m => m.marker.addTo(subPinLayer));
       if (open) subParking.filter(m => m.root === open).forEach(m => m.marker.addTo(subParkLayer));
-      // While an area is open, hide its own pin when all its routes are on sub area pins.
-      // It comes back on "Back to all areas".
+      // While an area with sub area pins is open, its own pin only counts the routes that
+      // are NOT on a sub area pin (routes on the main area, or in sub areas with no map point).
+      // If that leaves none, the main pin hides. "Back to all areas" puts the full count back.
       markers.filter(m => m.alwaysShown && !m.area.Parent_Area_ID).forEach(m => {
-        const hide = m.area.Area_ID === open && subPins.length > 0 && allRoutesOnSubPins(open);
-        if (hide) map.removeLayer(m.marker);
-        else if (!map.hasLayer(m.marker)) m.marker.addTo(map);
+        const a = m.area;
+        if (a.Area_ID === open && subPins.length > 0) {
+          const leftover = r => !onSubPin(r, a.Area_ID);
+          const n = [a.Area_ID, ...descendants.get(a.Area_ID)].reduce((t, id) => t + (visibleByArea.get(id) || []).filter(leftover).length, 0);
+          if (!n) { map.removeLayer(m.marker); return; }
+          m.marker.setIcon(pinIcon(a, leftover)).setTooltipContent(esc(`${a.Area_Name} (routes not on a wall pin): ${n} route(s)`));
+        } else {
+          m.marker.setIcon(pinIcon(a)).setTooltipContent(tooltipFor(a));
+        }
+        if (!map.hasLayer(m.marker)) m.marker.addTo(map);
       });
     }
     updateSubPins();
