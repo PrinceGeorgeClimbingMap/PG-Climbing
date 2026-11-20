@@ -38,7 +38,7 @@ window.CONFIG = {
   // ---- "Suggest a change" form ----
   // Paste the Web app URL from your Suggestions sheet's Apps Script here (see setup steps).
   // Leave it blank to hide all the suggest buttons.
-  suggestUrl: '',
+  suggestUrl: 'https://script.google.com/macros/s/AKfycbw_GpT28cxqcc2XWgxRMQnojPmMvrlo1I60DIhEQKUvFMkdstmMbOW_ZGzxvGMTzbgz/exec',
 
   // ---- Trail lines ----
   // Names of the .geojson trail files you uploaded next to index.html.
