@@ -285,13 +285,27 @@
       return `<details class="pitches"><summary>${list.length} pitches: ${grades}</summary>${rows}</details>`;
     }
 
+    // ---- "Suggest a change" buttons (only when suggestUrl is set in config.js) ----
+    let suggest = null;
+    const canSuggest = () => !!C.suggestUrl;
+    const routeSuggestHtml = r => {
+      if (!canSuggest()) return '';
+      // No grade: a yellow prompt. No description: a quiet "Add a description" link. Otherwise "Suggest an edit".
+      if (!r.Grade) return `<button type="button" class="sg-gap" data-suggest="route" data-id="${esc(r.Route_ID)}">Know this route? Help fill it in</button>`;
+      const text = !r.Description && !(pitchesOf.get(r.Route_ID) || []).length ? 'Add a description' : 'Suggest an edit';
+      return `<button type="button" class="sg-link" data-suggest="route" data-id="${esc(r.Route_ID)}">&#9998; ${text}</button>`;
+    };
+    const areaSuggestHtml = a => !canSuggest() ? '' :
+      `<div class="sg-area"><button type="button" class="sg-btn" data-suggest="addroute" data-id="${esc(a.Area_ID)}">+ Add a route here</button>` +
+      `<button type="button" class="sg-btn" data-suggest="area" data-id="${esc(a.Area_ID)}">&#9998; Fix area info</button></div>`;
+
     function routeHtml(r) {
       const list = pitchesOf.get(r.Route_ID);
       const pitchCount = list && list.length > 1 ? list.length + ' pitches' : null;
       const meta = [r.Climb_Type, metres(r.Height_m), pitchCount, r.Gear, r.First_Ascent].filter(Boolean).map(esc).join(' · ');
       const status = C.showStatusTags && r.Route_Status ? `<span class="tag">${esc(r.Route_Status)}</span>` : '';
       const descent = r.Descent ? `<div class="descent"><b>Descent:</b> ${esc(r.Descent)}</div>` : '';
-      return `<div class="route"><span class="grade">${esc(r.Grade)}</span> <b>${esc(r.Route_Name)}</b>${status}<div class="muted">${meta}</div><div>${esc(r.Description)}</div>${pitchesHtml(r)}${descent}${topoCardsHtml(r)}</div>`;
+      return `<div class="route"><span class="grade">${esc(r.Grade)}</span> <b>${esc(r.Route_Name)}</b>${status}<div class="muted">${meta}</div><div>${esc(r.Description)}</div>${pitchesHtml(r)}${descent}${topoCardsHtml(r)}${routeSuggestHtml(r)}</div>`;
     }
 
     // Parking spots and approaches for an area.
@@ -315,6 +329,7 @@
         infoHtml(a.Area_ID) + unlinkedToposHtml(a.Area_ID) +
         own.map(routeHtml).join('') + kids.map(subAreaHtml).join('') +
         (own.length || kids.length ? '' : '<div class="muted">No matching routes.</div>') +
+        areaSuggestHtml(a) +
         '</details>';
     }
 
@@ -325,7 +340,8 @@
       const top = areas.filter(a => !a.Parent_Area_ID).map(a => ({ a, n: countIn(a.Area_ID) })).sort((x, y) => y.n - x.n);
       panel.innerHTML =
         `<h2>Areas</h2>   ${C.aboutText ? `<p>${esc(C.aboutText).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>')}</p>` : ''}<p class="muted">${visible.length} matching route(s). Click a marker or an area below.</p>` +
-        top.map(({ a, n }) => `<div class="item${n ? '' : ' off'}" data-area="${esc(a.Area_ID)}"><span>${esc(a.Area_Name)}${hasCoords(a) ? '' : ' <span class="tag">not on map</span>'}</span><b>${n}</b></div>`).join('');
+        top.map(({ a, n }) => `<div class="item${n ? '' : ' off'}" data-area="${esc(a.Area_ID)}"><span>${esc(a.Area_Name)}${hasCoords(a) ? '' : ' <span class="tag">not on map</span>'}</span><b>${n}</b></div>`).join('') +
+        (canSuggest() ? `<button type="button" class="sg-btn sg-wide" data-suggest="crag">+ Know a crag that's missing? Add it</button>` : '');
       panel.scrollTop = 0;
     }
 
@@ -333,6 +349,7 @@
       current = a;
       const own = visibleByArea.get(a.Area_ID) || [];
       let html = `<button type="button" class="back" data-home>&larr; Back to all areas</button><h2>${esc(a.Area_Name)}</h2><div class="muted">${esc(a.Area_Level)} · ${countIn(a.Area_ID)} matching route(s)</div>`;
+      html += areaSuggestHtml(a);
       if (a.Access_Description) html += `<div class="access">${esc(a.Access_Description)}</div>`;
       html += infoHtml(a.Area_ID) + unlinkedToposHtml(a.Area_ID);
       if (own.length) html += `<details open><summary>Routes here (${own.length})</summary>${own.map(routeHtml).join('')}</details>`;
@@ -393,6 +410,8 @@
     }, true);
 
     panel.addEventListener('click', e => {
+      const sg = e.target.closest('[data-suggest]');
+      if (sg) { if (suggest) suggest.open(sg.dataset.suggest, sg.dataset.id); return; }
       if (e.target.closest('[data-home]')) return goHome();
       const item = e.target.closest('[data-area]');
       if (item) pick(item.dataset.area);
@@ -406,13 +425,14 @@
     // ---- background maps (switch with the layers button, top right) ----
     const basemaps = {
       'Map': L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
+        maxZoom: 22, maxNativeZoom: 19, attribution: '&copy; OpenStreetMap contributors'
       }),
       'Satellite': L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-        maxZoom: 19, attribution: 'Imagery &copy; Esri, Maxar, Earthstar Geographics'
+        // Esri's sharpest photos are zoom 19; past that the tiles are enlarged so you can keep zooming in.
+        maxZoom: 22, maxNativeZoom: 19, attribution: 'Imagery &copy; Esri, Maxar, Earthstar Geographics'
       }),
       'Topo': L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19, maxNativeZoom: 17, subdomains: 'abc',
+        maxZoom: 22, maxNativeZoom: 17, subdomains: 'abc',
         attribution: 'Map data &copy; OpenStreetMap contributors, SRTM | Style &copy; OpenTopoMap (CC-BY-SA)'
       })
     };
@@ -603,6 +623,13 @@
       refresh();
       zoomHome();
     });
+
+    if (window.makeSuggest) {
+      suggest = window.makeSuggest({
+        config: C, map, areaById, routeById, pitchesOf,
+        mainAreas: () => areas.filter(a => !a.Parent_Area_ID).sort((x, y) => String(x.Area_Name).localeCompare(String(y.Area_Name)))
+      });
+    }
 
     showHome();
   }
