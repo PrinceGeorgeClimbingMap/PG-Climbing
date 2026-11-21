@@ -9,7 +9,7 @@ window.CONFIG = {
 
   // ---- Look and wording ----
   title: 'Prince George Area Climbs',          // name in the top bar and browser tab
-  aboutText:  "Use at your own discretion. Info might be outdated, incomplete or just plain wrong. Climbing is dangerous so use your noodle. If you notice something is outdated, incomplete, or wrong then suggest an edit! Can be done for areas, routes, parking, topos, descriptions, photos, etc. Look for the edit icon next to routes and for each area. Include your name or it may get ignored' ,  // intro above the area list (leave blank for none)
+  aboutText:  'Use at your own discretion. Info might be outdated, incomplete or just plain wrong. Climbing is dangerous so use your noodle. If you notice something is outdated, incomplete, or wrong then suggest an edit! Can be done for areas, routes, parking, topos, descriptions, photos, etc. Look for the edit icon next to routes and for each area. Include your name or it may get ignored' ,  // intro above the area list (leave blank for none)
   headerColor: '#001E13',                      // top bar colour
   gradeTextColor: '#b3261e',                   // colour of the grade in route lists
 
