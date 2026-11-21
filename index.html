@@ -11,6 +11,8 @@
   <div id="loading"><b id="loading-title">Prince George Area Climbs</b><span>Loading climbs&hellip;</span></div>
   <header id="top">
     <b id="site-title"></b>
+    <button id="filter-toggle" type="button" aria-expanded="false" aria-controls="controls">Filters</button>
+    <div id="controls">
     <div id="filters">
       <span id="types"></span>
       <label>Rope grade <select id="rmin"></select> to <select id="rmax"></select></label>
@@ -20,17 +22,22 @@
     </div>
     <label><input type="checkbox" id="parking-toggle" checked>Parking</label>
     <button id="reset" type="button">Reset</button>
+    </div>
   </header>
 
   <div id="wrap">
     <div id="map"><div id="legend"></div></div>
-    <aside id="panel"></aside>
+    <div id="sheet">
+      <div id="sheet-handle" role="button" tabindex="0" aria-label="Drag or tap to resize the list"><span></span></div>
+      <aside id="panel"></aside>
+    </div>
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
   <script src="config.js"></script>
   <script src="suggest.js"></script>
+  <script src="logbook.js"></script>
   <script src="app.js"></script>
   <script data-goatcounter="https://pgclimbing.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
 </body>

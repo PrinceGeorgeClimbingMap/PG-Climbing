@@ -35,16 +35,17 @@
     return row;
   }
 
-  const loadCsv = url => new Promise((resolve, reject) =>
-    Papa.parse(url, {
-      download: true, header: true, skipEmptyLines: true,
-      complete: result => resolve(result.data.map(cleanRow)),
-      error: reject
-    }));
+  const parseCsv = text => Papa.parse(text || '', { header: true, skipEmptyLines: true }).data.map(cleanRow);
 
-  // Optional tables: a missing or broken one is treated as empty.
-  const loadOptionalCsv = (url, requiredColumn) =>
-    loadCsv(url).then(rows => rows.filter(r => r[requiredColumn])).catch(() => []);
+  // ---- remembered data: repeat visits show the last copy instantly, then check for updates ----
+  const CACHE_PREFIX = 'pgmap-data:';
+  const cacheGet = url => { try { return localStorage.getItem(CACHE_PREFIX + url); } catch (e) { return null; } };
+  const cacheSet = (url, text) => { try { localStorage.setItem(CACHE_PREFIX + url, text); } catch (e) { /* full or blocked: fine */ } };
+
+  const fetchText = url => fetch(url, { cache: 'no-cache' }).then(r => {
+    if (!r.ok) throw new Error(url + ' -> ' + r.status);
+    return r.text();
+  });
 
   // Trail files: each may be a FeatureCollection or a single Feature.
   const loadTrails = files => Promise.all(
@@ -116,20 +117,58 @@
   document.documentElement.style.setProperty('--accent', C.gradeTextColor);
   const ready = () => document.body.classList.remove('loading');
 
-  Promise.all([
-    loadCsv(SHEETS.areas || 'Areas.csv'),
-    loadCsv(SHEETS.routes || 'Routes.csv'),
-    loadOptionalCsv(SHEETS.topos || 'Topos.csv', 'Topo_ID'),
-    loadOptionalCsv(SHEETS.topoRoutes || 'Topo_Routes.csv', 'Topo_ID'),
-    loadOptionalCsv(SHEETS.parking || 'Parking.csv', 'Parking_ID'),
-    loadOptionalCsv(SHEETS.approaches || 'Approaches.csv', 'Approach_ID'),
-    loadOptionalCsv(SHEETS.pitches || 'Pitches.csv', 'Route_ID'),
-    loadTrails(C.trailFiles || [])
-  ]).then(start).then(ready).catch(err => {
+  // [link, column every real row has (optional tables only)]. Areas and Routes must load.
+  const TABLES = [
+    [SHEETS.areas || 'Areas.csv'],
+    [SHEETS.routes || 'Routes.csv'],
+    [SHEETS.topos || 'Topos.csv', 'Topo_ID'],
+    [SHEETS.topoRoutes || 'Topo_Routes.csv', 'Topo_ID'],
+    [SHEETS.parking || 'Parking.csv', 'Parking_ID'],
+    [SHEETS.approaches || 'Approaches.csv', 'Approach_ID'],
+    [SHEETS.pitches || 'Pitches.csv', 'Route_ID']
+  ];
+  const tablesFrom = texts => TABLES.map(([, col], i) => {
+    const rows = parseCsv(texts[i]);
+    return col ? rows.filter(r => r[col]) : rows;
+  });
+  const fetchAll = () => Promise.all(TABLES.map(([url, col]) =>
+    col ? fetchText(url).catch(() => '') : fetchText(url)));
+
+  const failed = err => {
     console.error(err);
     ready();
     $('panel').textContent = 'Could not load the site data. Check the links in config.js, or make sure Areas.csv and Routes.csv sit next to index.html. If you opened this file by double-clicking it, put it on a web host instead.';
-  });
+  };
+  const trailsReady = loadTrails(C.trailFiles || []);
+  const cached = TABLES.map(([url]) => cacheGet(url));
+
+  if (cached[0] && cached[1]) {
+    // Seen this before: draw from the saved copy now, then quietly check Google for changes.
+    trailsReady.then(trails => { start([...tablesFrom(cached), trails]); ready(); }).catch(failed);
+    fetchAll().then(fresh => {
+      const changed = fresh.some((t, i) => t && t !== (cached[i] || ''));
+      fresh.forEach((t, i) => { if (t) cacheSet(TABLES[i][0], t); });   // a blip on one table never wipes its saved copy
+      if (changed) showUpdateNotice();
+    }).catch(() => { /* offline or Google is slow: the saved copy stays on screen */ });
+  } else {
+    // First visit: wait for Google, then remember it for next time.
+    Promise.all([fetchAll(), trailsReady]).then(([texts, trails]) => {
+      texts.forEach((t, i) => { if (t) cacheSet(TABLES[i][0], t); });
+      start([...tablesFrom(texts), trails]);
+      ready();
+    }).catch(failed);
+  }
+
+  // Small bar offering the newer info. Reloading picks it up from the saved copy, instantly.
+  function showUpdateNotice() {
+    if ($('update-notice')) return;
+    const bar = document.createElement('div');
+    bar.id = 'update-notice';
+    bar.innerHTML = 'New route info is available <button type="button">Show it</button><button type="button" class="later" aria-label="Dismiss">&times;</button>';
+    bar.querySelector('button').onclick = () => location.reload();
+    bar.querySelector('.later').onclick = () => bar.remove();
+    document.body.appendChild(bar);
+  }
 
   function start([areas, routes, topos, topoRoutes, parking, approaches, pitchRows, trailFeatures]) {
     if (C.hideUnverified) {
@@ -261,7 +300,7 @@
       return (toposOfRoute.get(route.Route_ID) || []).map(({ topo, label }) => {
         const legend = (routesOnTopo.get(topo.Topo_ID) || []).map(o =>
           `<div class="${o.route.Route_ID === route.Route_ID ? 'hl' : ''}" style="margin-top:3px"><span class="label">${esc(o.label)}</span>${esc(o.route.Route_Name)} <span class="grade">${esc(o.route.Grade)}</span></div>`).join('');
-        return `<details class="topo-card"><summary>Topo: ${esc(topo.title || 'Topo')} - this route is <span class="label">${esc(label)}</span></summary>${topoHeader(topo)}${photo(topo.image, 'Topo: ' + (topo.title || ''))}${legend}${topoFooter(topo)}</details>`;
+        return `<details class="topo-card" data-key="t-${esc(route.Route_ID)}-${esc(topo.Topo_ID)}"><summary>Topo: ${esc(topo.title || 'Topo')} - this route is <span class="label">${esc(label)}</span></summary>${topoHeader(topo)}${photo(topo.image, 'Topo: ' + (topo.title || ''))}${legend}${topoFooter(topo)}</details>`;
       }).join('');
     }
 
@@ -288,11 +327,13 @@
         const head = [x.Grade, metres(x.Length_m)].filter(Boolean).map(esc).join(' · ');
         return `<div class="pitch"><b>P${esc(x.Pitch || i + 1)}</b>${head ? ` <span class="grade">${head}</span>` : ''}${x.Description ? `<div>${esc(x.Description)}</div>` : ''}${photos(x.Photo_URL)}</div>`;
       }).join('');
-      return `<details class="pitches"><summary>${list.length} pitches: ${grades}</summary>${rows}</details>`;
+      return `<details class="pitches" data-key="p-${esc(r.Route_ID)}"><summary>${list.length} pitches: ${grades}</summary>${rows}</details>`;
     }
 
     // ---- "Suggest a change" buttons (only when suggestUrl is set in config.js) ----
     let suggest = null;
+    let logbook = null;
+    let page = null;            // 'board' or 'mine' while a logbook page is open
     const canSuggest = () => !!C.suggestUrl;
     const routeSuggestHtml = r => {
       if (!canSuggest()) return '';
@@ -311,7 +352,7 @@
       const meta = [r.Climb_Type, metres(r.Height_m), pitchCount, r.Gear, r.First_Ascent].filter(Boolean).map(esc).join(' · ');
       const status = C.showStatusTags && r.Route_Status ? `<span class="tag">${esc(r.Route_Status)}</span>` : '';
       const descent = r.Descent ? `<div class="descent"><b>Descent:</b> ${esc(r.Descent)}</div>` : '';
-      return `<div class="route"><span class="grade">${esc(r.Grade)}</span> <b>${esc(r.Route_Name)}</b>${status}<div class="muted">${meta}</div><div>${esc(r.Description)}</div>${pitchesHtml(r)}${descent}${topoCardsHtml(r)}${routeSuggestHtml(r)}</div>`;
+      return `<div class="route"><span class="grade">${esc(r.Grade)}</span> <b>${esc(r.Route_Name)}</b>${status}<div class="muted">${meta}</div><div>${esc(r.Description)}</div>${pitchesHtml(r)}${descent}${topoCardsHtml(r)}${logbook ? logbook.routeRowHtml(r) : ''}${routeSuggestHtml(r)}</div>`;
     }
 
     // Parking spots and approaches for an area.
@@ -335,17 +376,19 @@
         infoHtml(a.Area_ID) + unlinkedToposHtml(a.Area_ID) +
         own.map(routeHtml).join('') + kids.map(subAreaHtml).join('') +
         (own.length || kids.length ? '' : '<div class="muted">No matching routes.</div>') +
-        areaSuggestHtml(a) +
+        areaSuggestHtml(a) + (logbook ? logbook.cragBoardHtml(a) : '') +
         '</details>';
     }
 
     function showHome() {
       current = null;
+      page = null;
       trailLayer.clearLayers();
       updateSubPins();
       const top = areas.filter(a => !a.Parent_Area_ID).map(a => ({ a, n: countIn(a.Area_ID) })).sort((x, y) => y.n - x.n);
       panel.innerHTML =
         `<h2>Areas</h2>   ${C.aboutText ? `<p>${esc(C.aboutText).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>')}</p>` : ''}<p class="muted">${visible.length} matching route(s). Click a marker or an area below.</p>` +
+        (logbook ? logbook.homeButtonsHtml() : '') +
         top.map(({ a, n }) => `<div class="item${n ? '' : ' off'}" data-area="${esc(a.Area_ID)}"><span>${esc(a.Area_Name)}${hasCoords(a) ? '' : ' <span class="tag">not on map</span>'}</span><b>${n}</b></div>`).join('') +
         (canSuggest() ? `<button type="button" class="sg-btn sg-wide" data-suggest="crag">+ Know a crag that's missing? Add it</button>` : '');
       panel.scrollTop = 0;
@@ -353,15 +396,18 @@
 
     function showArea(a) {
       current = a;
+      page = null;
       const own = visibleByArea.get(a.Area_ID) || [];
       let html = `<button type="button" class="back" data-home>&larr; Back to all areas</button><h2>${esc(a.Area_Name)}</h2><div class="muted">${esc(a.Area_Level)} · ${countIn(a.Area_ID)} matching route(s)</div>`;
       html += areaSuggestHtml(a);
+      if (logbook) html += logbook.cragBoardHtml(a);
       if (a.Access_Description) html += `<div class="access">${esc(a.Access_Description)}</div>`;
       html += infoHtml(a.Area_ID) + unlinkedToposHtml(a.Area_ID);
-      if (own.length) html += `<details open><summary>Routes here (${own.length})</summary>${own.map(routeHtml).join('')}</details>`;
+      if (own.length) html += `<details open data-key="own"><summary>Routes here (${own.length})</summary>${own.map(routeHtml).join('')}</details>`;
       html += (kidsOf.get(a.Area_ID) || []).map(subAreaHtml).join('');
       panel.innerHTML = html;
       panel.scrollTop = 0;
+      if (phone.matches && sheetStop === 'mini') setSheet('half');
       drawTrails(a);
       updateSubPins();
     }
@@ -381,6 +427,8 @@
       const lotIds = new Set(approaches.filter(x => ids.has(x.Area_ID)).map(x => x.Parking_ID));
       const points = [];
       if (hasCoords(a)) points.push([a.Latitude, a.Longitude]);
+      // Sub area pins too, so every wall's pin is in view.
+      [...ids].forEach(id => { const x = areaById.get(id); if (x && x !== a && hasCoords(x)) points.push([x.Latitude, x.Longitude]); });
       parking.filter(p => hasCoords(p) && (ids.has(p.Area_ID) || lotIds.has(p.Parking_ID)))
         .forEach(p => points.push([p.Latitude, p.Longitude]));
       let bounds = null;
@@ -390,9 +438,9 @@
       });
       points.forEach(pt => { bounds = bounds ? bounds.extend(pt) : L.latLngBounds(pt, pt); });
       if (bounds && bounds.isValid() && !bounds.getSouthWest().equals(bounds.getNorthEast())) {
-        map.fitBounds(bounds, { padding: [50, 50], maxZoom: zoom + 1 });
+        map.fitBounds(bounds, fitOpts({ maxZoom: zoom + 1 }));
       } else if (points.length) {
-        map.setView(points[0], Math.max(map.getZoom(), zoom));   // never zooms back out
+        centerOn(points[0], Math.max(map.getZoom(), zoom));   // never zooms back out
       }
     }
 
@@ -402,7 +450,9 @@
       drawTrails(a);
       focusMap(a);
     }
+    let restoring = false;
     panel.addEventListener('toggle', e => {
+      if (restoring) return;
       const box = e.target;
       if (!box.matches || !box.matches('details[data-sub]')) return;
       if (box.open) {
@@ -416,6 +466,7 @@
     }, true);
 
     panel.addEventListener('click', e => {
+      if (logbook && logbook.handleClick(e)) return;
       const sg = e.target.closest('[data-suggest]');
       if (sg) { if (suggest) suggest.open(sg.dataset.suggest, sg.dataset.id); return; }
       if (e.target.closest('[data-home]')) return goHome();
@@ -427,6 +478,80 @@
     //  Map
     // ===========================================================================
     const map = L.map('map');
+
+    // ===========================================================================
+    //  Phones: the list is a drawer over the bottom of the map (peek / half / full)
+    // ===========================================================================
+    const phone = window.matchMedia('(max-width: 700px)');
+    const wrapEl = $('wrap');
+    let sheetStop = 'half';
+    let sheetPx = 0;
+    const sheetStops = () => {
+      const H = wrapEl.clientHeight;
+      return { mini: Math.min(96, H * 0.25), half: Math.round(H * 0.45), full: Math.round(H - 56) };
+    };
+    function setSheet(stop, px) {
+      if (!phone.matches) { sheetPx = 0; wrapEl.style.removeProperty('--sheet-h'); return; }
+      sheetStop = stop || sheetStop;
+      sheetPx = Math.round(px != null ? px : sheetStops()[sheetStop]);
+      wrapEl.style.setProperty('--sheet-h', sheetPx + 'px');
+    }
+    // How much of the map the drawer covers, so zooming keeps things in the part you can see.
+    const coveredBottom = () => phone.matches ? sheetPx : 0;
+    const fitOpts = extra => Object.assign({ paddingTopLeft: [50, 50], paddingBottomRight: [50, 50 + coveredBottom()] }, extra);
+    function centerOn(latlng, zoom) {
+      map.setView(latlng, zoom, { animate: false });
+      if (coveredBottom()) map.panBy([0, coveredBottom() / 2], { animate: false });
+    }
+
+    (function drawerDrag() {
+      const handle = $('sheet-handle');
+      let startY = null, startPx = 0, moved = false;
+      handle.addEventListener('pointerdown', e => {
+        if (!phone.matches) return;
+        startY = e.clientY; startPx = sheetPx; moved = false;
+        handle.setPointerCapture(e.pointerId);
+        wrapEl.classList.add('dragging');
+      });
+      handle.addEventListener('pointermove', e => {
+        if (startY == null) return;
+        const dy = e.clientY - startY;
+        if (Math.abs(dy) > 4) moved = true;
+        const st = sheetStops();
+        setSheet(null, Math.max(st.mini, Math.min(st.full, startPx - dy)));
+      });
+      const end = e => {
+        if (startY == null) return;
+        const dy = e.clientY - startY;
+        startY = null;
+        wrapEl.classList.remove('dragging');
+        const st = sheetStops();
+        if (!moved) {
+          setSheet(sheetStop === 'full' ? 'half' : sheetStop === 'half' ? 'full' : 'half');      // a tap steps it up or back
+        } else {
+          // Snap to the nearest stop, leaning the way the finger was going.
+          const target = sheetPx - dy * 0.3;
+          setSheet(Object.keys(st).reduce((a, b) => Math.abs(st[b] - target) < Math.abs(st[a] - target) ? b : a));
+        }
+      };
+      handle.addEventListener('pointerup', end);
+      handle.addEventListener('pointercancel', end);
+      handle.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSheet(sheetStop === 'full' ? 'half' : 'full'); }
+      });
+    })();
+
+    // Filters button (phones): opens the filter controls under the title.
+    $('filter-toggle').addEventListener('click', () => {
+      const open = $('top').classList.toggle('open');
+      $('filter-toggle').setAttribute('aria-expanded', open);
+      setSheet();
+      map.invalidateSize();
+    });
+    const relayout = () => { setSheet(); map.invalidateSize(); };
+    window.addEventListener('resize', relayout);
+    if (phone.addEventListener) phone.addEventListener('change', relayout);
+    setSheet('half');
 
     // ---- background maps (switch with the layers button, top right) ----
     const basemaps = {
@@ -587,7 +712,7 @@
     // The starting view: every main area in sight. "Back to all areas" and Reset return here.
     const mainPins = markers.filter(m => m.alwaysShown);
     const homeBounds = mainPins.length ? L.featureGroup(mainPins.map(m => m.marker)).getBounds().pad(0.15) : null;
-    const zoomHome = () => { if (homeBounds) map.fitBounds(homeBounds); };
+    const zoomHome = () => { if (homeBounds) map.fitBounds(homeBounds, fitOpts()); };
     zoomHome();
 
     function goHome() {
@@ -608,15 +733,49 @@
       $('legend').innerHTML = '<div class="legend-head"><b>Ring = grade mix</b> <span class="legend-arrow">&#9662;</span></div><div class="legend-body">' +
         BAND_COLORS.map((c, i) => `<div><i style="background:${c}"></i>${BAND_LABELS[i]}</div>`).join('') + 'Number = routes</div>';
       $('legend').addEventListener('click', () => $('legend').classList.toggle('collapsed'));
+      if (phone.matches) $('legend').classList.add('collapsed');     // small screens start with it folded
     }
 
     // ===========================================================================
     //  Wiring
     // ===========================================================================
+    // Filters button shows when any filter is on (phones only show the button).
+    function updateFilterBadge() {
+      const on = [...document.querySelectorAll('#filters select')].some(x => x.value) || $('q').value.trim() ||
+        ($('multi') && $('multi').checked) || [...document.querySelectorAll('.type-box')].some(x => !x.checked);
+      $('filter-toggle').classList.toggle('on', !!on);
+      $('filter-toggle').textContent = on ? 'Filters \u2022 on' : 'Filters';
+    }
+
     function refresh() {
+      updateFilterBadge();
       computeVisible();
       markers.forEach(({ area, marker }) => { marker.setIcon(pinIcon(area)); marker.setTooltipContent(tooltipFor(area)); });
-      return current ? showArea(current) : showHome();
+      return page ? showPage(page) : current ? showArea(current) : showHome();
+    }
+
+    // Leaderboard and My climbs pages.
+    function showPage(name) {
+      current = null;
+      page = name;
+      trailLayer.clearLayers();
+      updateSubPins();
+      panel.innerHTML = `<button type="button" class="back" data-home>&larr; Back to all areas</button>` + logbook.pageHtml(name);
+      panel.scrollTop = 0;
+      if (phone.matches && sheetStop === 'mini') setSheet('half');
+    }
+
+    // Redraw the panel in place (after logging a climb) without losing your spot or open sections.
+    function rerender() {
+      const y = panel.scrollTop;
+      // Sections are matched by name (data-key / data-sub), so new ones appearing can't shuffle them.
+      const keyOf = d => d.dataset.key || (d.dataset.sub ? 's-' + d.dataset.sub : null);
+      const open = new Map([...panel.querySelectorAll('details')].map(d => [keyOf(d), d.open]).filter(([k]) => k));
+      if (page) showPage(page); else if (current) showArea(current); else showHome();
+      restoring = true;
+      panel.querySelectorAll('details').forEach(d => { const k = keyOf(d); if (k && open.has(k)) d.open = open.get(k); });
+      panel.scrollTop = y;
+      setTimeout(() => { restoring = false; }, 0);
     }
 
     $('filters').addEventListener('input', refresh);
@@ -630,6 +789,9 @@
       zoomHome();
     });
 
+    if (window.makeLogbook) {
+      logbook = window.makeLogbook({ config: C, routeById, areaById, descendants, parseGrade, rerender, showPage });
+    }
     if (window.makeSuggest) {
       suggest = window.makeSuggest({
         config: C, map, areaById, routeById, pitchesOf,
