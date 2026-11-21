@@ -14,8 +14,10 @@
   const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   const niceDate = s => { const d = new Date(s + 'T12:00'); return isNaN(d) ? esc(s) : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }); };
 
-  const ROPE_STYLES = ['Onsight', 'Flash', 'Redpoint', 'Top rope', 'Attempt'];
-  const BOULDER_STYLES = ['Flash', 'Send', 'Attempt'];
+  // A log means "I climbed it". On lead routes (sport, trad...) it only counts if you led it;
+  // a top rope of a lead route is kept in My climbs but stays off the leaderboard.
+  const DONE = 'Climbed', LED = 'Led', TR = 'Top rope';
+  const isLeadRoute = r => /sport|trad|mixed|aid|lead/i.test((r && r.Climb_Type) || '');
 
   window.makeLogbook = function (ctx) {
     const C = ctx.config;
@@ -30,7 +32,7 @@
     // ---- points: grades are worth more as they get harder ----
     //  5.5 and under 1 · 5.6 2 · 5.7 3 · 5.8 4 · 5.9 5 · 5.10a 6 · 5.10b 7 ... +1 per letter (5.11a 10, 5.12a 14)
     //  Boulders: V0 4 · V1 6 · V2 8 ... +2 per V grade (V5 14, V10 24)
-    //  Top rope on a route that can be led: half points. Attempts don't count. No grade: 1 point.
+    //  No grade: 1 point. Each route counts once per climber. Lead routes only count if led.
     function gradePoints(grade) {
       const g = ctx.parseGrade(grade);
       if (!g.sys) return 1;
@@ -38,13 +40,8 @@
       const num = Math.floor(g.val / 4), letter = g.val % 4;
       return num < 10 ? Math.max(1, num - 4) : 6 + (num - 10) * 4 + letter;
     }
-    const isBoulder = r => /boulder/i.test(r.Climb_Type || '') || /^V\d/.test(String(r.Grade || '').trim());
-    function logPoints(route, style) {
-      if (!route || /attempt/i.test(style)) return 0;
-      const p = gradePoints(route.Grade);
-      return /top ?rope/i.test(style) && !/top ?rope/i.test(route.Climb_Type || '') ? Math.ceil(p / 2) : p;
-    }
-    const counts = style => !/attempt/i.test(style || '');
+    const logPoints = route => route ? gradePoints(route.Grade) : 0;
+    const counts = style => !/attempt|top ?rope/i.test(style || '');
 
     // ---- leaderboard maths ----
     // Each climber counts each route once, at its best-scoring log.
@@ -55,7 +52,7 @@
         if (!route || !counts(style) || (filter && !filter(route, date))) return;
         const key = name.toLowerCase();
         if (!people.has(key)) people.set(key, { name, routes: new Map() });
-        const p = people.get(key), pts = logPoints(route, style), had = p.routes.get(routeId);
+        const p = people.get(key), pts = logPoints(route), had = p.routes.get(routeId);
         if (!had || pts > had.pts) p.routes.set(routeId, { route, pts, style, date });
       });
       return [...people.values()].map(p => {
@@ -80,7 +77,7 @@
         const sub = key === 'count' ? `${r.points} pts` : `${r.count} route${r.count === 1 ? '' : 's'}`;
         const climbs = r.list.slice().sort((a, b) => String(b.date).localeCompare(String(a.date))).map(x => {
           const area = ctx.areaById.get(x.route.Area_ID);
-          return `<div class="lb-route"><span class="grade">${esc(x.route.Grade)}</span> ${esc(x.route.Route_Name)} <span class="muted">${esc(area ? area.Area_Name : '')} · ${esc(x.style)} · ${niceDate(x.date)} · ${x.pts} pts</span></div>`;
+          return `<div class="lb-route"><span class="grade">${esc(x.route.Grade)}</span> ${esc(x.route.Route_Name)} <span class="muted">${esc(area ? area.Area_Name : '')} · ${niceDate(x.date)} · ${x.pts} pts</span></div>`;
         }).join('');
         return `<details class="lb-row${isMe(r.name) ? ' me' : ''}" data-key="lb-${esc(scope)}-${esc(r.name.toLowerCase())}"><summary><span class="lb-place">${medal}</span>` +
           `<span class="lb-name">${esc(r.name)}${r.hardest ? ` <span class="muted">hardest ${esc(r.hardest)}</span>` : ''}</span>` +
@@ -89,22 +86,52 @@
     }
 
     // ---- pages ----
+    // ---- latest sends: newest first (same date: most recently posted first) ----
+    function latestSends(max) {
+      return board.map((b, i) => ({ name: b[0], route: ctx.routeById.get(b[1]), date: b[2], style: b[3], i }))
+        .filter(x => x.route && counts(x.style))
+        .sort((a, b) => String(b.date).localeCompare(String(a.date)) || b.i - a.i)
+        .slice(0, max);
+    }
+    function ago(date) {
+      const days = Math.round((new Date(today() + 'T12:00') - new Date(date + 'T12:00')) / 86400000);
+      return days <= 0 ? 'today' : days === 1 ? 'yesterday' : days < 7 ? `${days} days ago` : niceDate(date);
+    }
+    const sentence = x => `<b>${esc(x.name)}</b> ${x.style === LED ? 'led' : 'climbed'} <b>${esc(x.route.Route_Name)}</b> <span class="grade">${esc(x.route.Grade)}</span>`;
+    function feedHtml() {
+      const list = latestSends(40);
+      if (!list.length) return `<p class="muted">No climbs posted yet. Be the first: tap <b>&#10003; Log</b> on any route.</p>`;
+      return list.map(x => {
+        const area = ctx.areaById.get(x.route.Area_ID);
+        return `<div class="feed-row" data-goto-route="${esc(x.route.Route_ID)}">${sentence(x)}<div class="muted">${esc(area ? area.Area_Name : '')} · ${ago(x.date)}</div></div>`;
+      }).join('');
+    }
+    // Card for the front page.
+    function latestSendCardHtml() {
+      const x = latestSends(1)[0];
+      return `<button type="button" class="hl-card" data-lb-page="board" data-lb-goto="feed"><span class="hl-label">&#129495; Latest send</span>` +
+        (x ? `<span class="hl-main">${sentence(x)}</span><span class="muted">${esc((ctx.areaById.get(x.route.Area_ID) || {}).Area_Name || '')} · ${ago(x.date)}</span>`
+          : `<span class="hl-main">Nothing posted yet</span><span class="muted">Log a climb to get on the board</span>`) + `</button>`;
+    }
+
     function boardPageHtml() {
+      const btn = (attr, val, cur, label) => `<button type="button" class="lb-tab${val === cur ? ' on' : ''}" ${attr}="${val}">${label}</button>`;
+      const tabs = `<h2>&#127942; Leaderboard</h2>` +
+        `<div class="lb-tabs">${btn('data-lb-tab', 'routes', tab, 'Most routes')}${btn('data-lb-tab', 'points', tab, 'Points')}${btn('data-lb-tab', 'feed', tab, 'Latest sends')}</div>`;
+      if (tab === 'feed') return tabs + feedHtml();
       const rows = standings((route, date) => inPeriod(date)).sort((a, b) =>
         tab === 'routes' ? b.count - a.count || b.points - a.points : b.points - a.points || b.count - a.count);
       const key = tab === 'routes' ? 'count' : 'points';
-      const btn = (attr, val, cur, label) => `<button type="button" class="lb-tab${val === cur ? ' on' : ''}" ${attr}="${val}">${label}</button>`;
-      return `<h2>&#127942; Leaderboard</h2>` +
-        `<div class="lb-tabs">${btn('data-lb-tab', 'routes', tab, 'Most routes')}${btn('data-lb-tab', 'points', tab, 'Points')}</div>` +
+      return tabs +
         `<div class="lb-tabs small">${btn('data-lb-period', 'all', period, 'All time')}${btn('data-lb-period', 'year', period, thisYear)}</div>` +
         (rows.length ? rankedHtml(rows, key, 50, 'board') : `<p class="muted">No climbs posted ${period === 'year' ? 'this year ' : ''}yet. Be the first: tap <b>&#10003; Log</b> on any route.</p>`) +
         `<details class="lb-help" data-key="lb-help"><summary>How points work</summary><p>Harder grades are worth more: 5.6 = 2, 5.8 = 4, 5.9 = 5, 5.10a = 6, then +1 per letter (5.11a = 10, 5.12a = 14). ` +
-        `Boulders: V0 = 4, then +2 per grade (V3 = 10, V5 = 14). Top roping a route that can be led is half points, attempts don't count, and each route counts once per climber.</p></details>` +
+        `Boulders: V0 = 4, then +2 per grade (V3 = 10, V5 = 14). Sport and trad routes only count if you led them. Each route counts once per climber.</p></details>` +
         `<p class="muted">Logging is honour system. Posting is optional; your logs are always saved on your phone.</p>`;
     }
 
     function myLogs() {
-      const local = ticks.map(t => ({ ...t, where: t.posted ? 'public' : t.wantPost ? 'waiting' : 'phone' }));
+      const local = ticks.map(t => ({ ...t, where: !counts(t.style) ? 'tr' : t.posted ? 'public' : t.wantPost ? 'waiting' : 'phone' }));
       const ids = new Set(local.map(t => t.id));
       const remote = me ? board.filter(b => isMe(b[0]) && !ids.has(b[4]))
         .map(b => ({ id: b[4], routeId: b[1], date: b[2], style: b[3], where: 'elsewhere', posted: true })) : [];
@@ -117,16 +144,16 @@
       logs.forEach(t => {
         const r = ctx.routeById.get(t.routeId);
         if (!r || !counts(t.style)) return;
-        const pts = logPoints(r, t.style);
+        const pts = logPoints(r);
         if (!best.has(t.routeId) || pts > best.get(t.routeId)) best.set(t.routeId, pts);
       });
       const points = [...best.values()].reduce((a, b) => a + b, 0);
-      const label = { public: 'on leaderboard', waiting: 'will post when online', phone: 'only on this phone', elsewhere: 'posted from another device' };
+      const label = { public: 'on leaderboard', waiting: 'will post when online', phone: 'only on this phone', elsewhere: 'posted from another device', tr: "top roped, doesn't count" };
       const rows = logs.map(t => {
         const r = ctx.routeById.get(t.routeId) || { Route_Name: '(route removed)', Grade: '' };
         const area = ctx.areaById.get(r.Area_ID);
         return `<div class="my-log"><div><span class="grade">${esc(r.Grade)}</span> <b>${esc(r.Route_Name)}</b>` +
-          `<div class="muted">${esc(area ? area.Area_Name : '')} · ${esc(t.style)} · ${niceDate(t.date)} · <span class="tag ${t.where}">${label[t.where]}</span></div>` +
+          `<div class="muted">${esc(area ? area.Area_Name : '')} · ${niceDate(t.date)} · <span class="tag ${t.where}">${label[t.where]}</span></div>` +
           `${t.note ? `<div class="my-note">${esc(t.note)}</div>` : ''}</div>` +
           `<button type="button" class="my-del" data-lb-del="${esc(t.id)}" aria-label="Delete this log">&times;</button></div>`;
       }).join('');
@@ -156,10 +183,11 @@
         if (!sends.has(k) || String(date) < String(sends.get(k).date)) sends.set(k, { name, date, style });
       });
       const mine = ticks.filter(t => t.routeId === r.Route_ID && counts(t.style)).sort((a, b) => String(b.date).localeCompare(String(a.date)))[0];
+      const trOnly = !mine && ticks.some(t => t.routeId === r.Route_ID);
       const who = [...sends.values()].sort((a, b) => String(a.date).localeCompare(String(b.date)))
-        .map(s => `<div><b>${esc(s.name)}</b> <span class="muted">${esc(s.style)} · ${niceDate(s.date)}</span></div>`).join('');
+        .map(s => `<div><b>${esc(s.name)}</b> <span class="muted">${niceDate(s.date)}</span></div>`).join('');
       return `<div class="lb-routebar">` +
-        `<button type="button" class="lb-log${mine ? ' done' : ''}" data-lb-log="${esc(r.Route_ID)}">${mine ? `&#10003; ${esc(mine.style)}` : '&#10003; Log'}</button>` +
+        `<button type="button" class="lb-log${mine ? ' done' : ''}" data-lb-log="${esc(r.Route_ID)}">${mine ? (mine.style === LED ? '&#10003; Led' : '&#10003; Climbed') : trOnly ? '&#10003; Top roped' : '&#10003; Log'}</button>` +
         (sends.size ? `<details class="lb-who" data-key="w-${esc(r.Route_ID)}"><summary>${sends.size} climber${sends.size === 1 ? ' has' : 's have'} done this</summary>${who}</details>` : '') +
         `</div>`;
     }
@@ -181,14 +209,17 @@
       const route = ctx.routeById.get(routeId);
       if (!route) return;
       editing = { route, tick: null };
-      const styles = isBoulder(route) ? BOULDER_STYLES : ROPE_STYLES;
-      const defStyle = /top ?rope/i.test(route.Climb_Type || '') ? 'Top rope' : styles[isBoulder(route) ? 1 : 2];
       const post = store.get('postdefault', true);
+      const before = ticks.filter(t => t.routeId === routeId).sort((x, y) => String(y.date).localeCompare(String(x.date)))[0];
       box.innerHTML = `<button type="button" class="sg-x" data-lb-close aria-label="Close">&times;</button>` +
         `<h3 id="lb-title">Log: ${esc(route.Route_Name)}</h3><p class="sg-where"><span class="grade">${esc(route.Grade)}</span> · ${gradePoints(route.Grade)} pts</p>` +
         `<form novalidate>` +
-        `<div class="sg-two"><label class="sg-field"><span>Date</span><input type="date" name="date" value="${today()}" max="${today()}"></label>` +
-        `<label class="sg-field"><span>Style</span><select name="style">${styles.map(s => `<option${s === defStyle ? ' selected' : ''}>${s}</option>`).join('')}</select></label></div>` +
+        (before ? `<p class="sg-hint lb-again">You logged this on ${niceDate(before.date)}. Saving again adds another log (it still only counts once). To undo, use &#10003; My climbs.</p>` : '') +
+        (isLeadRoute(route) ? `<div class="sg-field"><span>How did you climb it?</span><div class="lb-how">` +
+          `<label><input type="radio" name="how" value="${LED}" checked> Led it</label>` +
+          `<label><input type="radio" name="how" value="${TR}"> Top roped it</label></div>` +
+          `<p class="sg-hint lb-tr-note" hidden>Top ropes of lead routes are saved to My climbs but don't count on the leaderboard.</p></div>` : '') +
+        `<label class="sg-field"><span>Date climbed</span><input type="date" name="date" value="${today()}" max="${today()}"></label>` +
         `<label class="sg-field"><span>Note (only on your phone)</span><textarea name="note" rows="2" placeholder="Beta, partners, conditions..."></textarea></label>` +
         `<label class="lb-post"><input type="checkbox" name="post"${post ? ' checked' : ''}> Post to the public leaderboard</label>` +
         `<div class="lb-who-fields"${post ? '' : ' hidden'}>` +
@@ -205,14 +236,21 @@
 
     box.addEventListener('change', e => {
       if (e.target.name === 'post') box.querySelector('.lb-who-fields').hidden = !e.target.checked;
+      if (e.target.name === 'how') {
+        const tr = e.target.value === TR;
+        box.querySelector('.lb-tr-note').hidden = !tr;
+        box.querySelector('.lb-post').hidden = tr;
+        box.querySelector('.lb-who-fields').hidden = tr || !box.querySelector('[name=post]').checked;
+      }
     });
     box.addEventListener('click', e => { if (e.target.closest('[data-lb-close]')) closeLog(); });
     box.addEventListener('submit', async e => {
       e.preventDefault();
       const f = e.target, msg = f.querySelector('.sg-msg'), btn = f.querySelector('.sg-send');
       const say = (t, bad) => { msg.textContent = t; msg.className = 'sg-msg' + (bad ? ' bad' : ''); };
-      const post = f.elements.post.checked;
-      store.set('postdefault', post);
+      const how = f.elements.how ? [...f.elements.how].find(x => x.checked).value : DONE;
+      const post = f.elements.post.checked && how !== TR;      // top ropes of lead routes never go public
+      if (how !== TR) store.set('postdefault', f.elements.post.checked);
       let who = me || pendingMe;
       if (post && !who) {
         const name = f.elements.name.value.replace(/\s+/g, ' ').trim(), code = f.elements.code.value;
@@ -223,10 +261,10 @@
       // Saved on the phone first, so a log is never lost to a bad signal.
       if (!editing.tick) {
         editing.tick = { id: newId(), routeId: editing.route.Route_ID, date: f.elements.date.value || today(),
-          style: f.elements.style.value, note: f.elements.note.value.trim(), createdAt: new Date().toISOString(), wantPost: post, posted: false };
+          style: how, note: f.elements.note.value.trim(), createdAt: new Date().toISOString(), wantPost: post, posted: false };
         ticks.push(editing.tick);
       } else {
-        Object.assign(editing.tick, { date: f.elements.date.value || today(), style: f.elements.style.value, note: f.elements.note.value.trim(), wantPost: post });
+        Object.assign(editing.tick, { date: f.elements.date.value || today(), style: how, note: f.elements.note.value.trim(), wantPost: post });
       }
       store.set('ticks', ticks);
       if (!post) { closeLog(); ctx.rerender(); return; }
@@ -310,7 +348,7 @@
       const log = e.target.closest('[data-lb-log]');
       if (log) { openLog(log.dataset.lbLog); return true; }
       const page = e.target.closest('[data-lb-page]');
-      if (page) { ctx.showPage(page.dataset.lbPage); return true; }
+      if (page) { if (page.dataset.lbGoto) tab = page.dataset.lbGoto; ctx.showPage(page.dataset.lbPage); return true; }
       const t = e.target.closest('[data-lb-tab]');
       if (t) { tab = t.dataset.lbTab; ctx.showPage('board'); return true; }
       const p = e.target.closest('[data-lb-period]');
@@ -330,7 +368,7 @@
     }
 
     return {
-      homeButtonsHtml, cragBoardHtml, routeRowHtml, handleClick,
+      homeButtonsHtml, cragBoardHtml, routeRowHtml, handleClick, latestSendCardHtml,
       pageHtml: name => name === 'board' ? boardPageHtml() : minePageHtml(),
       gradePoints
     };

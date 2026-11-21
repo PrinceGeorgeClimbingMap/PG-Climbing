@@ -125,7 +125,8 @@
     [SHEETS.topoRoutes || 'Topo_Routes.csv', 'Topo_ID'],
     [SHEETS.parking || 'Parking.csv', 'Parking_ID'],
     [SHEETS.approaches || 'Approaches.csv', 'Approach_ID'],
-    [SHEETS.pitches || 'Pitches.csv', 'Route_ID']
+    [SHEETS.pitches || 'Pitches.csv', 'Route_ID'],
+    [SHEETS.highlights || 'Highlights.csv', 'Newest_Route']
   ];
   const tablesFrom = texts => TABLES.map(([, col], i) => {
     const rows = parseCsv(texts[i]);
@@ -170,7 +171,7 @@
     document.body.appendChild(bar);
   }
 
-  function start([areas, routes, topos, topoRoutes, parking, approaches, pitchRows, trailFeatures]) {
+  function start([areas, routes, topos, topoRoutes, parking, approaches, pitchRows, highlightRows, trailFeatures]) {
     if (C.hideUnverified) {
       routes = routes.filter(r => !/unverified|needs review/i.test((r.Data_Confidence || '') + ' ' + (r.Route_Status || '')));
     }
@@ -352,7 +353,7 @@
       const meta = [r.Climb_Type, metres(r.Height_m), pitchCount, r.Gear, r.First_Ascent].filter(Boolean).map(esc).join(' · ');
       const status = C.showStatusTags && r.Route_Status ? `<span class="tag">${esc(r.Route_Status)}</span>` : '';
       const descent = r.Descent ? `<div class="descent"><b>Descent:</b> ${esc(r.Descent)}</div>` : '';
-      return `<div class="route"><span class="grade">${esc(r.Grade)}</span> <b>${esc(r.Route_Name)}</b>${status}<div class="muted">${meta}</div><div>${esc(r.Description)}</div>${pitchesHtml(r)}${descent}${topoCardsHtml(r)}${logbook ? logbook.routeRowHtml(r) : ''}${routeSuggestHtml(r)}</div>`;
+      return `<div class="route" data-route="${esc(r.Route_ID)}"><span class="grade">${esc(r.Grade)}</span> <b>${esc(r.Route_Name)}</b>${status}<div class="muted">${meta}</div><div>${esc(r.Description)}</div>${pitchesHtml(r)}${descent}${topoCardsHtml(r)}${logbook ? logbook.routeRowHtml(r) : ''}${routeSuggestHtml(r)}</div>`;
     }
 
     // Parking spots and approaches for an area.
@@ -380,6 +381,38 @@
         '</details>';
     }
 
+    // ---- front page highlights ----
+    // Newest route: whatever you type under Newest_Route in the Highlights tab (a route name or Route_ID).
+    // If that's blank or doesn't match a route, it falls back to the latest year written in First_Ascent.
+    const faYear = r => Math.max(0, ...(String(r.First_Ascent || '').match(/\b(?:19|20)\d{2}\b/g) || []).map(Number));
+    function newestRoute() {
+      const wanted = String((highlightRows[0] || {}).Newest_Route || '').trim().toLowerCase();
+      if (wanted) {
+        const hit = routes.find(r => String(r.Route_Name || '').trim().toLowerCase() === wanted || String(r.Route_ID || '').toLowerCase() === wanted);
+        if (hit) return hit;
+      }
+      const year = Math.max(0, ...routes.map(faYear));
+      return year ? routes.filter(r => faYear(r) === year).pop() : null;
+    }
+    function highlightsHtml() {
+      const r = newestRoute();
+      const area = r && areaById.get(r.Area_ID);
+      const newCard = r ? `<button type="button" class="hl-card" data-goto-route="${esc(r.Route_ID)}"><span class="hl-label">&#127381; Newest route</span>` +
+        `<span class="hl-main"><b>${esc(r.Route_Name)}</b> <span class="grade">${esc(r.Grade)}</span></span>` +
+        `<span class="muted">${esc(area ? area.Area_Name : '')}${r.First_Ascent ? ' · FA ' + esc(r.First_Ascent) : ''}</span></button>` : '';
+      const sendCard = logbook ? logbook.latestSendCardHtml() : '';
+      return newCard || sendCard ? `<div class="hl-row">${newCard}${sendCard}</div>` : '';
+    }
+
+    // ---- where the info comes from (edit the list in config.js) ----
+    function sourcesHtml() {
+      const list = (C.sources || []).filter(s => s && s[0]);
+      if (!list.length) return '';
+      return `<div class="sources"><b>Where this info comes from</b><ul>` +
+        list.map(([label, url]) => `<li>${url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(label)}</a>` : esc(label)}</li>`).join('') +
+        `</ul><span class="muted">Thanks to everyone who's shared beta, topos and corrections.</span></div>`;
+    }
+
     function showHome() {
       current = null;
       page = null;
@@ -388,9 +421,11 @@
       const top = areas.filter(a => !a.Parent_Area_ID).map(a => ({ a, n: countIn(a.Area_ID) })).sort((x, y) => y.n - x.n);
       panel.innerHTML =
         `<h2>Areas</h2>   ${C.aboutText ? `<p>${esc(C.aboutText).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>')}</p>` : ''}<p class="muted">${visible.length} matching route(s). Click a marker or an area below.</p>` +
+        highlightsHtml() +
         (logbook ? logbook.homeButtonsHtml() : '') +
         top.map(({ a, n }) => `<div class="item${n ? '' : ' off'}" data-area="${esc(a.Area_ID)}"><span>${esc(a.Area_Name)}${hasCoords(a) ? '' : ' <span class="tag">not on map</span>'}</span><b>${n}</b></div>`).join('') +
-        (canSuggest() ? `<button type="button" class="sg-btn sg-wide" data-suggest="crag">+ Know a crag that's missing? Add it</button>` : '');
+        (canSuggest() ? `<button type="button" class="sg-btn sg-wide" data-suggest="crag">+ Know a crag that's missing? Add it</button>` : '') +
+        sourcesHtml();
       panel.scrollTop = 0;
     }
 
@@ -417,6 +452,23 @@
       if (!a) return;
       showArea(a);
       focusMap(a);
+    }
+
+    // Open a route's crag, scroll straight to the route and flash it.
+    function goToRoute(routeId) {
+      const r = routeById.get(routeId);
+      if (!r) return;
+      pick(r.Area_ID);
+      const el = panel.querySelector(`.route[data-route="${CSS.escape(r.Route_ID)}"]`);
+      if (!el) return;                                  // hidden by a filter
+      restoring = true;                                 // opening its sections shouldn't move the map
+      for (let d = el.closest('details'); d; d = d.parentElement.closest('details')) d.open = true;
+      setTimeout(() => { restoring = false; }, 0);
+      if (phone.matches && sheetStop !== 'full') setSheet('full');
+      requestAnimationFrame(() => {
+        panel.scrollTop += el.getBoundingClientRect().top - panel.getBoundingClientRect().top - 60;
+        el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
+      });
     }
 
     // Zoom so the area's pin, its trail and approach lines, and its parking are all in view.
@@ -467,6 +519,8 @@
 
     panel.addEventListener('click', e => {
       if (logbook && logbook.handleClick(e)) return;
+      const go = e.target.closest('[data-goto-route]');
+      if (go) return goToRoute(go.dataset.gotoRoute);
       const sg = e.target.closest('[data-suggest]');
       if (sg) { if (suggest) suggest.open(sg.dataset.suggest, sg.dataset.id); return; }
       if (e.target.closest('[data-home]')) return goHome();

@@ -32,7 +32,8 @@ window.CONFIG = {
     topos:      'https://docs.google.com/spreadsheets/d/e/2PACX-1vQCEMaOwar9UgSqCSFTdPYK4KiDOmCLPjX5V3aJblnTdYLprK9uR7OVkKpqqeP-iqBeS9KH5b5ylvW-/pub?gid=1234353708&single=true&output=csv',
     topoRoutes: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQCEMaOwar9UgSqCSFTdPYK4KiDOmCLPjX5V3aJblnTdYLprK9uR7OVkKpqqeP-iqBeS9KH5b5ylvW-/pub?gid=1559094142&single=true&output=csv',
     parking:    'https://docs.google.com/spreadsheets/d/e/2PACX-1vQCEMaOwar9UgSqCSFTdPYK4KiDOmCLPjX5V3aJblnTdYLprK9uR7OVkKpqqeP-iqBeS9KH5b5ylvW-/pub?gid=1977395802&single=true&output=csv',
-    approaches: ''
+    approaches: '',
+    highlights: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQCEMaOwar9UgSqCSFTdPYK4KiDOmCLPjX5V3aJblnTdYLprK9uR7OVkKpqqeP-iqBeS9KH5b5ylvW-/pub?gid=1096669600&single=true&output=csv'      // the Highlights tab (Newest_Route), published as CSV
   },
 
   // ---- "Suggest a change" form ----
@@ -42,6 +43,15 @@ window.CONFIG = {
   logbook: true,
 
   suggestUrl: 'https://script.google.com/macros/s/AKfycbw_GpT28cxqcc2XWgxRMQnojPmMvrlo1I60DIhEQKUvFMkdstmMbOW_ZGzxvGMTzbgz/exec',
+
+  // ---- Sources (shown at the bottom of the Areas list) ----
+  // Each line is ['what people see', 'link']. Leave the link as '' for plain text.
+  sources: [
+    ['rockclimbpg.ca', 'https://rockclimbpg.ca'],
+    ['Prince George Rock Climbing Club (Facebook group)', 'https://www.facebook.com/groups/2333723855'],
+    ['Mountain Project: Prince George', 'https://www.mountainproject.com/area/113375513/prince-george'],
+    [`Lyle Knight, Rock-Climber's Guide to the Central Interior of B.C. (1990, PDF)`, 'lyle-knight-guidebook.pdf']
+  ],
 
   // ---- Trail lines ----
   // Names of the .geojson trail files you uploaded next to index.html.
