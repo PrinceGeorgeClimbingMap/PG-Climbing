@@ -107,6 +107,15 @@
   // ===========================================================================
   //  Start
   // ===========================================================================
+  // Title and colours straight away; the rest of the page stays behind the
+  // loading screen until the data is in, so nothing jumps around as it fills.
+  document.title = C.title;
+  $('site-title').textContent = C.title;
+  $('loading-title').textContent = C.title;
+  document.documentElement.style.setProperty('--header', C.headerColor);
+  document.documentElement.style.setProperty('--accent', C.gradeTextColor);
+  const ready = () => document.body.classList.remove('loading');
+
   Promise.all([
     loadCsv(SHEETS.areas || 'Areas.csv'),
     loadCsv(SHEETS.routes || 'Routes.csv'),
@@ -116,8 +125,9 @@
     loadOptionalCsv(SHEETS.approaches || 'Approaches.csv', 'Approach_ID'),
     loadOptionalCsv(SHEETS.pitches || 'Pitches.csv', 'Route_ID'),
     loadTrails(C.trailFiles || [])
-  ]).then(start).catch(err => {
+  ]).then(start).then(ready).catch(err => {
     console.error(err);
+    ready();
     $('panel').textContent = 'Could not load the site data. Check the links in config.js, or make sure Areas.csv and Routes.csv sit next to index.html. If you opened this file by double-clicking it, put it on a web host instead.';
   });
 
@@ -127,10 +137,6 @@
     }
 
     // ---- page chrome ----
-    document.title = C.title;
-    $('site-title').textContent = C.title;
-    document.documentElement.style.setProperty('--header', C.headerColor);
-    document.documentElement.style.setProperty('--accent', C.gradeTextColor);
 
     // ---- area tree ----
     const areaById = new Map(areas.map(a => [a.Area_ID, a]));

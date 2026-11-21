@@ -1,5 +1,5 @@
 :root {
-  --header: #243b53;     /* set from config.js */
+  --header: #001E13;     /* set from config.js; this is just the colour before it loads */
   --accent: #b3261e;     /* set from config.js */
   --blue: #1565c0;
   --border: #ddd;
@@ -128,3 +128,10 @@ summary { font-weight: 600; cursor: pointer; }
   .sg-box { max-width: none; border-radius: 0; }
   .sg-two { grid-template-columns: 1fr; }
 }
+
+/* ---------- loading screen (stops the page jumping while the data loads) ---------- */
+#loading { display: none; }
+body.loading #loading { position: fixed; inset: 0; z-index: 5000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: var(--header); color: #fff; font-size: 15px; }
+#loading b { font-size: 20px; }
+#loading span { opacity: .8; animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .35; } }
