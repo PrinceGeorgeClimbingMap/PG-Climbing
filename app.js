@@ -143,7 +143,9 @@
   const trailsReady = loadTrails(C.trailFiles || []);
   const cached = TABLES.map(([url]) => cacheGet(url));
 
-  if (cached[0] && cached[1]) {
+  // Only use the saved copy if every tab has been saved before; a newly added tab (like
+  // Highlights) means waiting for Google once, so nothing shows stale or missing.
+  if (cached.every(c => c !== null)) {
     // Seen this before: draw from the saved copy now, then quietly check Google for changes.
     trailsReady.then(trails => { start([...tablesFrom(cached), trails]); ready(); }).catch(failed);
     fetchAll().then(fresh => {
@@ -154,7 +156,7 @@
   } else {
     // First visit: wait for Google, then remember it for next time.
     Promise.all([fetchAll(), trailsReady]).then(([texts, trails]) => {
-      texts.forEach((t, i) => { if (t) cacheSet(TABLES[i][0], t); });
+      texts.forEach((t, i) => cacheSet(TABLES[i][0], t));       // empty optional tabs are saved as empty
       start([...tablesFrom(texts), trails]);
       ready();
     }).catch(failed);
